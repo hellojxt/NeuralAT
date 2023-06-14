@@ -48,19 +48,19 @@ inline CGPU_FUNC float3 local_to_global2(float x1, float x2, float3 *v)
     return (1 - x1) * v[0] + (x1 - x2) * v[1] + x2 * v[2];
 }
 
-inline CGPU_FUNC cpx singular_point(float xsi,
-                                    float eta1,
-                                    float eta2,
-                                    float eta3,
-                                    float weight,
-                                    float3 *trial_v,
-                                    float3 *test_v,
-                                    float3 trial_norm,
-                                    int neighbor_num,
-                                    cpx s,
-                                    PotentialType type)
+inline CGPU_FUNC float singular_point(float xsi,
+                                      float eta1,
+                                      float eta2,
+                                      float eta3,
+                                      float weight,
+                                      float3 *trial_v,
+                                      float3 *test_v,
+                                      float3 trial_norm,
+                                      int neighbor_num,
+                                      float s,
+                                      PotentialType type)
 {
-    cpx result = cpx(0, 0);
+    float result = 0;
     xsi = 0.5 * (xsi + 1);
     eta1 = 0.5 * (eta1 + 1);
     eta2 = 0.5 * (eta2 + 1);
@@ -148,18 +148,19 @@ inline CGPU_FUNC cpx singular_point(float xsi,
     return result;
 }
 
-inline CGPU_FUNC cpx singular_integrand(float3 *trial_v,
-                                        float3 *test_v,
-                                        float trial_jacobian,
-                                        float test_jacobian,
-                                        cpx s,
-                                        int neighbor_num,
-                                        PotentialType type)
+inline CGPU_FUNC float singular_integrand(float3 *trial_v,
+                                          float3 *test_v,
+                                          float trial_jacobian,
+                                          float test_jacobian,
+                                          float s,
+                                          int neighbor_num,
+                                          float3 trial_norm,
+                                          PotentialType type)
 {
     float guass_x[LINE_GAUSS_NUM] = LINE_GAUSS_XS;
     float guass_w[LINE_GAUSS_NUM] = LINE_GAUSS_WS;
-    cpx result = cpx(0, 0);
-    float3 trial_norm = triangle_norm(trial_v);
+    float result = 0;
+    // int idx = 0;
     for (int xsi_i = 0; xsi_i < LINE_GAUSS_NUM; xsi_i++)
         for (int eta1_i = 0; eta1_i < LINE_GAUSS_NUM; eta1_i++)
             for (int eta2_i = 0; eta2_i < LINE_GAUSS_NUM; eta2_i++)
@@ -168,17 +169,51 @@ inline CGPU_FUNC cpx singular_integrand(float3 *trial_v,
                     result += singular_point(guass_x[xsi_i], guass_x[eta1_i], guass_x[eta2_i], guass_x[eta3_i],
                                              guass_w[xsi_i] * guass_w[eta1_i] * guass_w[eta2_i] * guass_w[eta3_i],
                                              trial_v, test_v, trial_norm, neighbor_num, s, type);
+                    // if (idx <= 5)
+                    //     printf("result: %e\n", result);
+                    // idx++;
                 }
     return result * trial_jacobian * test_jacobian / 16;
 }
 
-inline CGPU_FUNC cpx
-regular_integrand(float3 *trial_v, float3 *test_v, float trial_jacobian, float test_jacobian, cpx s, PotentialType type)
+inline CGPU_FUNC float singular_integrand_256_block(float3 *trial_v,
+                                                    float3 *test_v,
+                                                    float trial_jacobian,
+                                                    float test_jacobian,
+                                                    float s,
+                                                    int neighbor_num,
+                                                    float3 trial_norm,
+                                                    PotentialType type)
 {
-    cpx result = cpx(0, 0);
+    float guass_x[LINE_GAUSS_NUM] = LINE_GAUSS_XS;
+    float guass_w[LINE_GAUSS_NUM] = LINE_GAUSS_WS;
+    float result = 0;
+    // int idx = 0;
+    int idx = threadIdx.x;
+    int xsi_i = idx / 64;
+    idx = idx % 64;
+    int eta1_i = idx / 16;
+    idx = idx % 16;
+    int eta2_i = idx / 4;
+    idx = idx % 4;
+    int eta3_i = idx;
+    result = singular_point(guass_x[xsi_i], guass_x[eta1_i], guass_x[eta2_i], guass_x[eta3_i],
+                            guass_w[xsi_i] * guass_w[eta1_i] * guass_w[eta2_i] * guass_w[eta3_i], trial_v, test_v,
+                            trial_norm, neighbor_num, s, type);
+    return result * trial_jacobian * test_jacobian / 16;
+}
+
+inline CGPU_FUNC float regular_integrand(float3 *trial_v,
+                                         float3 *test_v,
+                                         float trial_jacobian,
+                                         float test_jacobian,
+                                         float s,
+                                         PotentialType type)
+{
+    float result = 0;
     float guass_x[TRI_GAUSS_NUM][2] = TRI_GAUSS_XS;
     float guass_w[TRI_GAUSS_NUM] = TRI_GAUSS_WS;
-    float3 trial_norm = triangle_norm(trial_v);
+    float3 trial_norm = triangle_norm(test_v);
     for (int i = 0; i < TRI_GAUSS_NUM; i++)
         for (int j = 0; j < TRI_GAUSS_NUM; j++)
         {
@@ -186,13 +221,14 @@ regular_integrand(float3 *trial_v, float3 *test_v, float trial_jacobian, float t
             float3 v2 = local_to_global(guass_x[j][0], guass_x[j][1], test_v);
             result += 0.25 * guass_w[i] * guass_w[j] * trial_jacobian * test_jacobian *
                       layer_potential(v1, v2, trial_norm, s, type);
+            // printf("result: %e\n", result);
         }
     return result;
 }
 
-inline CGPU_FUNC cpx potential_integrand(float3 point, float3 *src_v, float src_jacobian, cpx s, PotentialType type)
+inline CGPU_FUNC float potential_integrand(float3 point, float3 *src_v, float src_jacobian, float s, PotentialType type)
 {
-    cpx result = cpx(0, 0);
+    float result = 0;
     float guass_x[TRI_GAUSS_NUM][2] = TRI_GAUSS_XS;
     float guass_w[TRI_GAUSS_NUM] = TRI_GAUSS_WS;
     float3 src_norm = triangle_norm(src_v);
@@ -209,7 +245,24 @@ enum PairType
     FACE_TO_POINT
 };
 
-inline CGPU_FUNC cpx face2FaceIntegrand(const float3 *vertices, int3 src, int3 trg, cpx k, PotentialType type)
+inline CGPU_FUNC float face2FaceIntegrandRegular(const float3 *vertices,
+                                                 int3 src,
+                                                 int3 trg,
+                                                 float k,
+                                                 PotentialType type)
+{
+    float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
+    float src_jacobian = jacobian(src_v);
+    float3 trg_v[3] = {{vertices[trg.x]}, {vertices[trg.y]}, {vertices[trg.z]}};
+    float trg_jacobian = jacobian(trg_v);
+    return regular_integrand(src_v, trg_v, src_jacobian, trg_jacobian, k, type);
+}
+
+inline CGPU_FUNC float face2FaceIntegrandSingular(const float3 *vertices,
+                                                  int3 src,
+                                                  int3 trg,
+                                                  float k,
+                                                  PotentialType type)
 {
 
     float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
@@ -217,58 +270,112 @@ inline CGPU_FUNC cpx face2FaceIntegrand(const float3 *vertices, int3 src, int3 t
     float3 trg_v[3] = {{vertices[trg.x]}, {vertices[trg.y]}, {vertices[trg.z]}};
     float trg_jacobian = jacobian(trg_v);
     int neighbor_num = triangle_common_vertex_num(src, trg);
-    if (neighbor_num == 0)
-        return regular_integrand(src_v, trg_v, src_jacobian, trg_jacobian, k, type);
-    else
+    float3 src_v2[3];
+    float3 trg_v2[3];
+    int i[3] = {0, 1, 2};
+    int j[3] = {0, 1, 2};
+    int src_int[3] = {src.x, src.y, src.z};
+    int trg_int[3] = {trg.x, trg.y, trg.z};
+    if (neighbor_num == 2)
     {
-        float3 src_v2[3];
-        float3 trg_v2[3];
-        int i[3] = {0, 1, 2};
-        int j[3] = {0, 1, 2};
-        int src_int[3] = {src.x, src.y, src.z};
-        int trg_int[3] = {trg.x, trg.y, trg.z};
-        if (neighbor_num == 2)
-        {
-            int idx = 0;
-            for (int jj = 0; jj < 3; jj++)
-                for (int ii = 0; ii < 3; ii++)
-                    if (src_int[ii] == trg_int[jj])
-                    {
-                        i[idx] = ii;
-                        j[idx] = jj;
-                        idx++;
-                    }
-            i[2] = 3 - i[0] - i[1];
-            j[2] = 3 - j[0] - j[1];
-        }
-        if (neighbor_num == 1)
-        {
+        int idx = 0;
+        for (int jj = 0; jj < 3; jj++)
             for (int ii = 0; ii < 3; ii++)
-                for (int jj = 0; jj < 3; jj++)
-                    if (src_int[ii] == trg_int[jj])
-                    {
-                        if (ii != 0)
-                        {
-                            i[0] = ii;
-                            i[ii] = 0;
-                        }
-                        if (jj != 0)
-                        {
-                            j[0] = jj;
-                            j[jj] = 0;
-                        }
-                    }
-        }
-        for (int idx = 0; idx < 3; idx++)
-        {
-            src_v2[idx] = src_v[i[idx]];
-            trg_v2[idx] = trg_v[j[idx]];
-        }
-        return singular_integrand(src_v2, trg_v2, src_jacobian, trg_jacobian, k, neighbor_num, type);
+                if (src_int[ii] == trg_int[jj])
+                {
+                    i[idx] = ii;
+                    j[idx] = jj;
+                    idx++;
+                }
+        i[2] = 3 - i[0] - i[1];
+        j[2] = 3 - j[0] - j[1];
     }
+    if (neighbor_num == 1)
+    {
+        for (int ii = 0; ii < 3; ii++)
+            for (int jj = 0; jj < 3; jj++)
+                if (src_int[ii] == trg_int[jj])
+                {
+                    if (ii != 0)
+                    {
+                        i[0] = ii;
+                        i[ii] = 0;
+                    }
+                    if (jj != 0)
+                    {
+                        j[0] = jj;
+                        j[jj] = 0;
+                    }
+                }
+    }
+    for (int idx = 0; idx < 3; idx++)
+    {
+        src_v2[idx] = src_v[i[idx]];
+        trg_v2[idx] = trg_v[j[idx]];
+    }
+    return singular_integrand(src_v2, trg_v2, src_jacobian, trg_jacobian, k, neighbor_num, triangle_norm(trg_v), type);
 }
 
-inline CGPU_FUNC cpx face2PointIntegrand(const float3 *vertices, int3 src, float3 trg, cpx k, PotentialType type)
+inline CGPU_FUNC float face2FaceIntegrandSingular256Thread(const float3 *vertices,
+                                                           int3 src,
+                                                           int3 trg,
+                                                           float k,
+                                                           PotentialType type)
+{
+
+    float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
+    float src_jacobian = jacobian(src_v);
+    float3 trg_v[3] = {{vertices[trg.x]}, {vertices[trg.y]}, {vertices[trg.z]}};
+    float trg_jacobian = jacobian(trg_v);
+    int neighbor_num = triangle_common_vertex_num(src, trg);
+    float3 src_v2[3];
+    float3 trg_v2[3];
+    int i[3] = {0, 1, 2};
+    int j[3] = {0, 1, 2};
+    int src_int[3] = {src.x, src.y, src.z};
+    int trg_int[3] = {trg.x, trg.y, trg.z};
+    if (neighbor_num == 2)
+    {
+        int idx = 0;
+        for (int jj = 0; jj < 3; jj++)
+            for (int ii = 0; ii < 3; ii++)
+                if (src_int[ii] == trg_int[jj])
+                {
+                    i[idx] = ii;
+                    j[idx] = jj;
+                    idx++;
+                }
+        i[2] = 3 - i[0] - i[1];
+        j[2] = 3 - j[0] - j[1];
+    }
+    if (neighbor_num == 1)
+    {
+        for (int ii = 0; ii < 3; ii++)
+            for (int jj = 0; jj < 3; jj++)
+                if (src_int[ii] == trg_int[jj])
+                {
+                    if (ii != 0)
+                    {
+                        i[0] = ii;
+                        i[ii] = 0;
+                    }
+                    if (jj != 0)
+                    {
+                        j[0] = jj;
+                        j[jj] = 0;
+                    }
+                }
+    }
+    for (int idx = 0; idx < 3; idx++)
+    {
+        src_v2[idx] = src_v[i[idx]];
+        trg_v2[idx] = trg_v[j[idx]];
+    }
+    return singular_integrand_256_block(src_v2, trg_v2, src_jacobian, trg_jacobian, k, neighbor_num,
+                                        triangle_norm(trg_v), type);
+}
+
+inline CGPU_FUNC float face2PointIntegrand(const float3 *vertices, int3 src, float3 trg, float k, PotentialType type)
 {
     float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
     float src_jacobian = jacobian(src_v);

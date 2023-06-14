@@ -178,7 +178,7 @@ static uint cudaGridSize(uint totalSize, uint blockSize)
     return dim == 0 ? 1 : dim;
 }
 
-#define CUDA_BLOCK_SIZE 64
+#define CUDA_BLOCK_SIZE 256
 /**
  * @brief Macro definition for execuation of cuda kernels, note that at lease one block will be executed.
  *

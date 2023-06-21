@@ -1,3 +1,6 @@
+import sys
+
+sys.path.append("./")
 from src.assemble import (
     assemble_single_boundary_matrix,
     assemble_double_boundary_matrix,

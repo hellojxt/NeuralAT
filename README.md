@@ -1,5 +1,6 @@
 # GNNBEM
 
+For bempp & pytorch
 ```
 conda create -n bem python pip -y
 conda activate bem

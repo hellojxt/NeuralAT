@@ -56,6 +56,7 @@ for wave_number in [1, 10, 100]:
     single_matrix_cuda = assemble_single_boundary_matrix(
         vertices, triangles, wave_number
     )
+    torch.cuda.synchronize()
     t2 = time.time() - start_time
     error = abs(single_matrix_cuda - single_matrix_bempp) / (
         (single_matrix_bempp**2).mean() ** 0.5

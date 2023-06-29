@@ -11,6 +11,7 @@ from src.assemble import (
 )
 import bempp.api
 import meshio
+import numpy as np
 
 with open("config/config.json") as f:
     config = json.load(f)
@@ -24,6 +25,7 @@ class SinSurfSignal:
         print("triangles", triangles.shape)
         phase = vertices[:, 2]
         phase = phase[triangles].mean(axis=1)
+        print(phase.shape)
         self.coefficients = torch.sin(phase * frequency)
         self.space = bempp.api.function_space(grid, "DP", 0)
 
@@ -46,7 +48,10 @@ class LearnableDirichlet(torch.nn.Module):
 
 
 mesh = meshio.read("dataset/surf_mesh/bowl.sf.obj")
-grid = bempp.api.Grid(mesh.points.T, mesh.cells_dict["triangle"].T)
+grid = bempp.api.Grid(
+    vertices=mesh.points.T,
+    elements=mesh.cells_dict["triangle"].T,
+)
 signal = SinSurfSignal(grid, 20)
 # signal.plot()
 vertices = torch.from_numpy(grid.vertices.T.astype("float32")).cuda()
@@ -60,7 +65,7 @@ def print_grad(model):
             print(f"Parameter: {name}, Gradient: {param.grad}")
 
 
-dirichlet = LearnableDirichlet(triangles.shape[0], feature_dim).cuda()
+dirichlet = LearnableDirichlet(triangles.shape[0], feature_dim=feature_dim).cuda()
 encoding = tcnn.Encoding(1, config["encoding"])
 network = tcnn.Network(encoding.n_output_dims + feature_dim, 1, config["network"])
 
@@ -69,64 +74,32 @@ parameters = (
     + list(network.parameters())
     + list(dirichlet.parameters())
 )
-optimizer = torch.optim.Adam(parameters, lr=0.001)
-lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.9)
 
-# batch_size = 64
+optimizer = torch.optim.Adam(parameters, lr=0.001)
+
 neumann = signal.coefficients
-x = torch.rand([1, 1], device="cuda")
-wave_number = (x * 20).item()
+freq = torch.rand([1, 1], device="cuda")
+wave_number = (freq * 20).item()
 single_matrix = assemble_single_boundary_matrix(vertices, triangles, wave_number)
 double_matrix = assemble_double_boundary_matrix(vertices, triangles, wave_number)
+A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
+b = (single_matrix @ neumann).unsqueeze(1)
+scale_factor = torch.norm(b) / torch.norm(
+    A @ torch.randn([triangles.shape[0], 1]).cuda()
+)
+b = b / scale_factor
 
-
-# get normalize factor
-with torch.no_grad():
-    freq_encode = encoding(x)
-    freq_encode = freq_encode.repeat(triangles.shape[0], 1)
-    feats = torch.cat([freq_encode, dirichlet()], axis=1)
-    print("feats", feats.shape)
-    dirichlet_pred = network(feats)
-    Ax = -0.5 * dirichlet_pred + double_matrix * dirichlet_pred
-    b = single_matrix * neumann
-    scale_factor = torch.norm(b) / torch.norm(Ax)
-    print("norm of double matrix", torch.norm(double_matrix))
-    print("norm of b", torch.norm(b))
-    print("norm of Ax", torch.norm(Ax))
-    print("scale factor", scale_factor)
-
-print(double_matrix[:10, :10])
-
-max_epoch = 2000
+max_epoch = 10000
 
 for i in tqdm(range(max_epoch)):
     optimizer.zero_grad()
-    freq_encode = encoding(x)
+    freq_encode = encoding(freq)
     freq_encode = freq_encode.repeat(triangles.shape[0], 1)
     feats = torch.cat([freq_encode, dirichlet()], axis=1)
-    dirichlet_pred = network(feats)
-    Ax = -0.5 * dirichlet_pred + double_matrix * dirichlet_pred
-    b = single_matrix * neumann / scale_factor
-    residual = (Ax - b) ** 2
-    loss = residual.mean() / (b**2).mean()
+    x = network(feats).float()
+    residual = A @ x - b
+    loss = (residual**2).mean() / (b**2).mean()
     loss.backward()
     optimizer.step()
-    lr_scheduler.step()
-
     if i % 100 == 0:
         print("loss", loss.item())
-        # print_grad(network)
-        # print_grad(encoding)
-        # print_grad(dirichlet)
-
-# import matplotlib.pyplot as plt
-
-# x = torch.linspace(0, 0.2, 1000, device="cuda").reshape(-1, 1)
-# y = sig(x).float()
-# y_pred = model(x).float()
-# print(x.shape, y.shape, y_pred.shape)
-# plt.plot(x.cpu().numpy(), y.cpu().numpy(), label="True")
-# plt.plot(x.cpu().numpy(), y_pred.cpu().detach().numpy(), label="Predicted")
-
-# plt.legend()
-# plt.show()

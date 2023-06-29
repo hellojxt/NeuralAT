@@ -76,22 +76,31 @@ parameters = (
 )
 
 optimizer = torch.optim.Adam(parameters, lr=0.001)
-
 neumann = signal.coefficients
-freq = torch.rand([1, 1], device="cuda")
-wave_number = (freq * 20).item()
-single_matrix = assemble_single_boundary_matrix(vertices, triangles, wave_number)
-double_matrix = assemble_double_boundary_matrix(vertices, triangles, wave_number)
-A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
-b = (single_matrix @ neumann).unsqueeze(1)
-scale_factor = torch.norm(b) / torch.norm(
-    A @ torch.randn([triangles.shape[0], 1]).cuda()
-)
-b = b / scale_factor
+max_epoch = 100000
 
-max_epoch = 10000
+freq_sample_cycle = 100
+error_dict = {}
+train_epoch_rate = 0.9
 
 for i in tqdm(range(max_epoch)):
+    if i % freq_sample_cycle == 0 or (i > max_epoch * train_epoch_rate and i % 10 == 0):
+        if i > max_epoch * train_epoch_rate:
+            print("loss", loss.item())
+            error_dict[wave_number] = loss.item()
+        freq = torch.rand([1, 1], device="cuda")
+        wave_number = (freq * 40).item()
+        single_matrix = assemble_single_boundary_matrix(
+            vertices, triangles, wave_number
+        )
+        double_matrix = assemble_double_boundary_matrix(
+            vertices, triangles, wave_number
+        )
+        A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
+        b = (single_matrix @ neumann).unsqueeze(1)
+        scale_factor = torch.norm(single_matrix) / torch.norm(A)
+        b = b / scale_factor
+
     optimizer.zero_grad()
     freq_encode = encoding(freq)
     freq_encode = freq_encode.repeat(triangles.shape[0], 1)
@@ -99,7 +108,13 @@ for i in tqdm(range(max_epoch)):
     x = network(feats).float()
     residual = A @ x - b
     loss = (residual**2).mean() / (b**2).mean()
-    loss.backward()
-    optimizer.step()
-    if i % 100 == 0:
-        print("loss", loss.item())
+    if i < max_epoch * train_epoch_rate:
+        loss.backward()
+        optimizer.step()
+
+
+import matplotlib.pyplot as plt
+
+# plot error_dict
+plt.plot(list(error_dict.keys()), list(error_dict.values()), "o")
+plt.savefig("figure/multi_freqs_error.png")

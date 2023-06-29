@@ -11,11 +11,6 @@ def tetra_surf_from_triangle_mesh(input_mesh, output_dir, log=False):
     input: the path to the input mesh
     output: the directory to store the output mesh
     """
-    mesh = meshio.read(input_mesh)
-    # check if the mesh is a triangle mesh
-    assert mesh.cells[0].type == "triangle"
-    # convert the triangle mesh to a tetrahedral mesh
-    # need to install FloatTetWild first
     result = subprocess.run(
         ["FloatTetwild_bin", "-i", input_mesh, "--max-threads", "8", "--coarsen"],
         capture_output=True,

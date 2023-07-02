@@ -10,6 +10,13 @@ cp /etc/OpenCL/vendors/nvidia.icd $(dirname "$(which python)")/../etc/OpenCL/ven
 pip install torch torchvision torchaudio
 ```
 
+For PyG
+```
+pip install torch_geometric
+# Optional dependencies:
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
+```
+
 
 For the installation of fTetWild:
 ```bash

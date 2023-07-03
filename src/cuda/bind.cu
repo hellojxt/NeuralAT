@@ -45,6 +45,9 @@ void __global__ assemble_matrix_singular_kernel(GArr<float3> vertices,
             if (common_vertex_num > 0)
             {
                 adj[atomicAdd_block(&adj_size, 1)] = j;
+#ifdef MEMORY_CHECK
+                assert(adj_size < 128);
+#endif
             }
         }
         __syncthreads();

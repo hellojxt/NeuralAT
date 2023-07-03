@@ -77,9 +77,9 @@ parameters = (
 
 optimizer = torch.optim.Adam(parameters, lr=0.001)
 neumann = signal.coefficients
-max_epoch = 100000
+max_epoch = 10000
 
-freq_sample_cycle = 100
+freq_sample_cycle = 1
 error_dict = {}
 train_epoch_rate = 0.9
 
@@ -100,6 +100,7 @@ for i in tqdm(range(max_epoch)):
         b = (single_matrix @ neumann).unsqueeze(1)
         scale_factor = torch.norm(single_matrix) / torch.norm(A)
         b = b / scale_factor
+        # print(scale_factor.item())
 
     optimizer.zero_grad()
     freq_encode = encoding(freq)

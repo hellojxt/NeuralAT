@@ -61,7 +61,7 @@ class MeshDataset(Dataset):
             self.phase = "test"
 
     def __len__(self):
-        return len(self.file_list)
+        return len(self.mesh_data_list)
 
     def pre_process_meshes(self):
         mesh_data_list = []
@@ -75,7 +75,8 @@ class MeshDataset(Dataset):
                 triangles = torch.from_numpy(triangles).long()
                 mesh = TriMesh(vertices, triangles)
                 mesh.normalize()
-                mesh_data_list.append(mesh)
+                if triangles.shape[0] < 15000:
+                    mesh_data_list.append(mesh)
             except:
                 print("Error in loading mesh: ", mesh_file)
 
@@ -103,4 +104,5 @@ class MeshDataset(Dataset):
             vertices=vertices,
             triangles=triangles,
             vertices_offset=vertices_offset,
+            neumann=neumann,
         )

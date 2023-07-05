@@ -44,12 +44,12 @@ boundary_operator_assembler = CUDA_MODULE.get("assemble_matrix")
 
 
 def assemble_single_boundary_matrix(vertices, triangles, wave_number):
-    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0]).cuda()
+    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
     boundary_operator_assembler(vertices, triangles, matrix_cuda, wave_number, False)
     return matrix_cuda
 
 
 def assemble_double_boundary_matrix(vertices, triangles, wave_number):
-    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0]).cuda()
+    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
     boundary_operator_assembler(vertices, triangles, matrix_cuda, wave_number, True)
     return matrix_cuda

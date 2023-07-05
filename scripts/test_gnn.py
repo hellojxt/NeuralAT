@@ -22,10 +22,12 @@ parser.add_argument("--dataset", type=str, default="dataset/ABC_Dataset/surf_mes
 parser.add_argument("--network", type=str, default="PointNet2")
 parser.add_argument("--preprocess", action="store_true")
 parser.add_argument("--hidden_dim", type=int, default=64)
-parser.add_argument("--batch_size", type=int, default=4)
-parser.add_argument("--epochs", type=int, default=100)
+parser.add_argument("--batch_size", type=int, default=8)
+parser.add_argument("--epochs", type=int, default=200)
+parser.add_argument("--scale_factor", type=float, default=0.0001)
 
 args = parser.parse_args()
+scale_factor = args.scale_factor
 train_dataset = MeshDataset(args.dataset, "train")
 test_dataset = MeshDataset(args.dataset, "val")
 if args.preprocess:
@@ -67,12 +69,14 @@ def epoch_step(train=True):
         graph_net.eval()
         data_loader = test_loader
 
+    losses = []
     for i, data in enumerate(data_loader):
         data = data.to(device)
         optimizer.zero_grad()
         x = graph_net(data)
         verts_off = data.vertices_offset
         verts_off_bound = torch.cumsum(verts_off, dim=0)
+        loss = 0
         for graph_idx in range(args.batch_size):
             vertices = (
                 data.vertices[
@@ -87,18 +91,37 @@ def epoch_step(train=True):
             # TriMesh(vertices, triangles).save_obj(f"test_{graph_idx}.obj")
             freq = torch.rand([1, 1], device="cuda")
             wave_number = 5 + (freq * 40).item()
-            single_matrix = assemble_single_boundary_matrix(
-                vertices, triangles, wave_number
-            )
             double_matrix = assemble_double_boundary_matrix(
                 vertices, triangles, wave_number
             )
-            return
-            # A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
-            # b = (single_matrix @ neumann).unsqueeze(1)
-            # scale_factor = torch.norm(single_matrix) / torch.norm(A)
-            # b = b / scale_factor
+            A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
+            b = data.neumann[mask]
+            freq_encode = freq_encoder(freq)
+            freq_encode = freq_encode.repeat(triangles.shape[0], 1)
+            feats = torch.cat([freq_encode, x[mask]], axis=1)
+            predict = decoder(feats).float()
+            residual = A @ predict - b
+            loss_currect = (residual**2).mean() / (b**2).mean()
+            loss = loss + loss_currect
+        loss = loss / args.batch_size
+        losses.append(loss.item())
+        if train:
+            loss.backward()
+            optimizer.step()
+    print(f"{'train' if train else 'test'} loss: {sum(losses) / len(losses)}")
+    return sum(losses) / len(losses)
 
 
-epoch_step(False)
-# for epoch in tqdm(range(args.epochs)):
+def train():
+    return epoch_step(True)
+
+
+@torch.no_grad()
+def test():
+    return epoch_step(False)
+
+
+for epoch in tqdm(range(args.epochs)):
+    train()
+    if epoch % 10 == 0:
+        test()

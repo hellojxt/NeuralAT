@@ -109,6 +109,7 @@ for i in tqdm(range(max_epoch)):
     x = network(feats).float()
     residual = A @ x - b
     loss = (residual**2).mean() / (b**2).mean()
+    print("loss", loss.item())
     if i < max_epoch * train_epoch_rate:
         loss.backward()
         optimizer.step()

@@ -1,5 +1,7 @@
 # GNNBEM
 
+
+## Requirements
 For bempp & pytorch
 ```
 conda create -n bem python pip -y
@@ -40,5 +42,13 @@ pip install commentjson
 Other dependencies:
 ```bash
 pip install matplotlib tqdm
+```
+
+## Usage
+
+1. Prepare the data. Put triangle meshed (.obj) in `dataset/ABC_Dataset/surf_mesh`
+2. Traing the model
+```bash
+python scripts/learning_bem.py
 ```
 

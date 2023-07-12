@@ -31,9 +31,9 @@ make
 
 Then add the build directory to the environment variable PATH.
 
-For the installation of tiny-cuda-nn:
+For the installation of tiny-cuda-nn (modified for 1 dimension):
 ```bash
-pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+pip install git+https://github.com/hellojxt/tiny-cuda-nn/#subdirectory=bindings/torch
 pip install commentjson
 ```
 

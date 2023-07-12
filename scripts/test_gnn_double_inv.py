@@ -70,14 +70,15 @@ def epoch_step(train=True):
         data_loader = test_loader
 
     losses = []
-    for i, data in enumerate(data_loader):
+    for i, data in enumerate(tqdm(data_loader)):
         data = data.to(device)
         optimizer.zero_grad()
         x = graph_net(data)
         verts_off = data.vertices_offset
         verts_off_bound = torch.cumsum(verts_off, dim=0)
         loss = 0
-        for graph_idx in range(args.batch_size):
+        graph_num = data.batch[-1] + 1
+        for graph_idx in range(graph_num):
             vertices = (
                 data.vertices[
                     verts_off_bound[graph_idx]
@@ -121,7 +122,7 @@ def test():
     return epoch_step(False)
 
 
-for epoch in tqdm(range(args.epochs)):
+for epoch in range(args.epochs):
     train()
     if epoch % 10 == 0:
         test()

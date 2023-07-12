@@ -71,7 +71,7 @@ class PointNet2(torch.nn.Module):
 
         self.mlp = MLP([128, 128, 128, out_feature_dim], dropout=0.5, norm=None)
 
-    def forward(self, data):
+    def forward(self, data, input_concat=False):
         sa0_out = (data.x, data.pos, data.batch)
         sa1_out = self.sa1_module(*sa0_out)
         sa2_out = self.sa2_module(*sa1_out)
@@ -81,4 +81,37 @@ class PointNet2(torch.nn.Module):
         fp2_out = self.fp2_module(*fp3_out, *sa1_out)
         x, _, _ = self.fp1_module(*fp2_out, *sa0_out)
 
-        return self.mlp(x)
+        x = self.mlp(x)
+        if input_concat:
+            x = torch.cat([x, data.x], dim=1)
+        return x
+
+
+class PointNet2Small(torch.nn.Module):
+    def __init__(self, in_feature_dim, out_feature_dim):
+        super().__init__()
+        # Input channels account for both `pos` and node features.
+        self.sa1_module = SAModule(0.2, 0.2, MLP([in_feature_dim + 3, 32, 32, 64]))
+        self.sa2_module = SAModule(0.25, 0.4, MLP([64 + 3, 64, 64, 128]))
+        self.sa3_module = GlobalSAModule(MLP([128 + 3, 128, 256, 512]))
+
+        self.fp3_module = FPModule(1, MLP([512 + 128, 128, 128]))
+        self.fp2_module = FPModule(3, MLP([128 + 64, 128, 64]))
+        self.fp1_module = FPModule(3, MLP([64 + in_feature_dim, 64, 64, 64]))
+
+        self.mlp = MLP([64, 64, out_feature_dim], dropout=0.5, norm=None)
+
+    def forward(self, data, input_concat=False):
+        sa0_out = (data.x, data.pos, data.batch)
+        sa1_out = self.sa1_module(*sa0_out)
+        sa2_out = self.sa2_module(*sa1_out)
+        sa3_out = self.sa3_module(*sa2_out)
+
+        fp3_out = self.fp3_module(*sa3_out, *sa2_out)
+        fp2_out = self.fp2_module(*fp3_out, *sa1_out)
+        x, _, _ = self.fp1_module(*fp2_out, *sa0_out)
+
+        x = self.mlp(x)
+        if input_concat:
+            x = torch.cat([x, data.x], dim=1)
+        return x

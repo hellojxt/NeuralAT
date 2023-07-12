@@ -12,7 +12,7 @@
     },
     "encoding": {
         "otype": "Grid",
-        "n_levels": 16,
+        "n_levels": 8,
         "n_features_per_level": 2,
         "base_resolution": 16,
         "per_level_scale": 2.0

@@ -51,8 +51,8 @@ Then add the build directory to the environment variable PATH.
 
 ## Usage
 
-1. Prepare the data. Put triangle meshed (.obj) in `dataset/ABC_Dataset/surf_mesh`
-2. Traing the model
+1. Prepare the data. Put triangle meshes (*.obj) in `dataset/ABC_Dataset/surf_mesh`
+2. Training the model
 ```bash
 python scripts/learning_bem.py
 ```

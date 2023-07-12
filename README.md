@@ -3,6 +3,8 @@
 
 ## Dependencies
 
+CUDA 11.7 (match with the version of PyTorch, which is required by Pytorch CUDA Extension in `src/cuda`):
+
 Pytorch
 ```
 pip install torch torchvision torchaudio

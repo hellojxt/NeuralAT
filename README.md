@@ -48,6 +48,12 @@ make
 ```
 Then add the build directory to the environment variable PATH.
 
+Isotrophic Remeshing
+```bash
+pip install pymeshlab
+python scripts/remeshing.py
+```
+Then a remeshed version of `dataset/ABC_Dataset/surf_mesh` will appear in `dataset/ABC_Dataset/surf_mesh_remeshed`.
 
 ## Usage
 

@@ -145,6 +145,8 @@ def step(train=True):
     return sum(losses) / len(losses)
 
 
+best_loss = 1e10
+
 for epoch in range(args.epochs):
     train_loss = step(train=True)
     with torch.no_grad():
@@ -153,3 +155,13 @@ for epoch in range(args.epochs):
     writer.add_scalar("train_loss", train_loss, epoch)
     writer.add_scalar("test_loss", test_loss, epoch)
     scheduler.step(test_loss)
+    if test_loss < best_loss:
+        best_loss = test_loss
+        torch.save(
+            {
+                "graph_net": graph_net.state_dict(),
+                "freq_encoder": freq_encoder.state_dict(),
+                "decoder": decoder.state_dict(),
+            },
+            f"checkpoints/{args.network}.pth",
+        )

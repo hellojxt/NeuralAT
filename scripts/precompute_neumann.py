@@ -26,6 +26,8 @@ if not os.path.exists(neumann_dir):
 for mesh_file in tqdm(glob(mesh_dir + "/*.obj")):
     basename = os.path.basename(mesh_file)
     obj = SoundObj(mesh_file)
+    if obj.origin_mesh.vertices.shape[0] > 15000:
+        continue
     obj.tetrahedralize()
     obj.modal_analysis(k=mode_num, material=Material(MatSet.Plastic))
     tree = KDTree(obj.tet_vertices)
@@ -38,4 +40,18 @@ for mesh_file in tqdm(glob(mesh_dir + "/*.obj")):
     vertex_normal = obj.origin_mesh.get_vertex_attribute("vertex_normal")
     neumann = (eigenvectors * vertex_normal.reshape(-1, 3, 1)).sum(axis=1)
     neumann = torch.from_numpy(neumann).float()
-    torch.save(neumann, neumann_dir + "/" + basename.replace(".sf.obj", ".pt"))
+    vertices = torch.from_numpy(obj.origin_mesh.vertices.copy()).float()
+    triangles = torch.from_numpy(obj.origin_mesh.faces.copy()).long()
+    vertices = vertices - vertices.mean(dim=0, keepdim=True)
+    vertices = vertices / vertices.abs().max()
+    # convert neumnann from vertex to triangle
+    neumann = neumann[triangles]
+    neumann = neumann.mean(dim=1)
+    torch.save(
+        {
+            "vertices": vertices,
+            "triangles": triangles,
+            "neumann": neumann,
+        },
+        neumann_dir + "/" + basename.replace(".sf.obj", ".pt"),
+    )

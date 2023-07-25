@@ -3,9 +3,6 @@ from torch.utils.data import Dataset
 import numpy as np
 import os
 from glob import glob
-import meshio
-import bempp.api
-from tqdm import tqdm
 from torch_geometric.data import Data
 
 
@@ -51,7 +48,7 @@ class MeshDataset(Dataset):
     def __init__(self, mesh_dir, split="train"):
         self.root_dir = mesh_dir
         self.split = split
-        self.file_list = glob(mesh_dir + "/*.obj")
+        self.file_list = glob(mesh_dir + "/*.pt")
         self.file_list.sort()
         if split == "train":
             self.file_list = self.file_list[: int(0.8 * len(self.file_list))]
@@ -61,32 +58,17 @@ class MeshDataset(Dataset):
             self.phase = "test"
 
     def __len__(self):
-        return len(self.mesh_data_list)
-
-    def pre_process_meshes(self):
-        mesh_data_list = []
-        print("Pre-processing meshes...")
-        for mesh_file in tqdm(self.file_list):
-            try:
-                mesh = meshio.read(mesh_file)
-                vertices = mesh.points
-                triangles = mesh.cells_dict["triangle"]
-                vertices = torch.from_numpy(vertices).float()
-                triangles = torch.from_numpy(triangles).long()
-                mesh = TriMesh(vertices, triangles)
-                mesh.normalize()
-                if triangles.shape[0] < 15000:
-                    mesh_data_list.append(mesh)
-            except:
-                print("Error in loading mesh: ", mesh_file)
-
-        torch.save(mesh_data_list, self.root_dir + f"/{self.phase}_data.pt")
-
-    def load_pre_processed_mesh(self):
-        self.mesh_data_list = torch.load(self.root_dir + f"/{self.phase}_data.pt")
+        return len(self.file_list)
 
     def __getitem__(self, idx):
-        mesh = self.mesh_data_list[idx]
+        data = torch.load(self.file_list[idx])
+        vertices = data["vertices"]
+        triangles = data["triangles"]
+        neumann = data["neumann"]
+        # randomly select a neumann
+        idx = torch.randint(0, neumann.shape[1], (1,)).item()
+        neumann = neumann[:, idx].unsqueeze(1)
+        mesh = TriMesh(vertices, triangles)
         mesh.random_transform()
         vertices = mesh.vertices
         triangles = mesh.triangles
@@ -95,7 +77,6 @@ class MeshDataset(Dataset):
         v3 = vertices[triangles[:, 2]]
         pos = (v1 + v2 + v3) / 3
         normal = torch.cross(v2 - v1, v3 - v1)
-        neumann = torch.randn(len(triangles), 1)
         x = torch.cat([v1 - pos, v2 - pos, v3 - pos, normal, pos, neumann], dim=1)
         vertices_offset = len(vertices)
         return Data(

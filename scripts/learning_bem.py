@@ -25,7 +25,6 @@ with open("config/config.json") as f:
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="dataset/ABC_Dataset/surf_mesh")
 parser.add_argument("--network", type=str, default="PointNet2")
-parser.add_argument("--preprocess", action="store_true")
 parser.add_argument("--hidden_dim", type=int, default=64)
 parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--epochs", type=int, default=200)
@@ -35,11 +34,6 @@ args = parser.parse_args()
 scale_factor = args.scale_factor
 train_dataset = MeshDataset(args.dataset, "train")
 test_dataset = MeshDataset(args.dataset, "test")
-if args.preprocess:
-    train_dataset.pre_process_meshes()
-    test_dataset.pre_process_meshes()
-train_dataset.load_pre_processed_mesh()
-test_dataset.load_pre_processed_mesh()
 train_loader = DataLoader(
     train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=8
 )

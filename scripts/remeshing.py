@@ -6,23 +6,24 @@ from tqdm import tqdm
 import numpy as np
 
 
-def remesh_single_obj(input_path="abc.obj", output_path="abc_2.obj", iterations=8, percentage=3.):
+def remesh_single_obj(
+    input_path="abc.obj", output_path="abc_2.obj", iterations=8, percentage=3.0
+):
     # remesh a single objecct so that the area of each face is roughly the same
     # not supported on arm macs
     # iterations: number of iterations, higher iter will result in more uniform mesh but longer time
     # percentage: average length of the output edges. 3 means 3%, and will lead to about 1~2k vertices in the output mesh
-    
+
     ms = pymeshlab.MeshSet()
     ms.load_new_mesh(input_path)
-   # target_len = ms.compute_average_edge_length()
+    # target_len = ms.compute_average_edge_length()
     target_len = pymeshlab.Percentage(percentage)
-    ms.apply_filter('meshing_isotropic_explicit_remeshing', 
-                    iterations=iterations, 
-                    targetlen=target_len)
-    ms.save_current_mesh(output_path, 
-                         save_vertex_normal=False,
-                         save_textures=False)
-
+    ms.apply_filter(
+        "meshing_isotropic_explicit_remeshing",
+        iterations=iterations,
+        targetlen=target_len,
+    )
+    ms.save_current_mesh(output_path, save_vertex_normal=False, save_textures=False)
 
 
 if __name__ == "__main__":
@@ -37,7 +38,13 @@ if __name__ == "__main__":
         all_files = os.listdir(IN_PATH)
         all_files = [file for file in all_files if file.endswith(".obj")]
         for file in tqdm(all_files):
-            in_name, out_name = os.path.join(IN_PATH, file), os.path.join(OUT_PATH, file)
+            in_name, out_name = os.path.join(IN_PATH, file), os.path.join(
+                OUT_PATH, file
+            )
+            # continue if the in_name is an empty file
+            with open(in_name, "r") as f:
+                if len(f.readlines()) < 100:
+                    continue
             try:
                 remesh_single_obj(in_name, out_name)
             except Exception as e:

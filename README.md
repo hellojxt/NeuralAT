@@ -55,6 +55,10 @@ python scripts/remeshing.py
 ```
 Then a remeshed version of `dataset/ABC_Dataset/surf_mesh` will appear in `dataset/ABC_Dataset/surf_mesh_remeshed`.
 
+for visualization:
+```bash
+pip install plotly ipywidgets IPython
+```
 ## Usage
 
 1. Prepare the data. Put triangle meshes (*.obj) in `dataset/ABC_Dataset/surf_mesh`

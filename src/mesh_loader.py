@@ -12,7 +12,7 @@ def tetra_surf_from_triangle_mesh(input_mesh, output_dir, log=False):
     output: the directory to store the output mesh
     """
     result = subprocess.run(
-        ["FloatTetwild_bin", "-i", input_mesh, "--max-threads", "8", "--coarsen"],
+        ["FloatTetwild_bin", "-i", input_mesh, "--max-threads", "8"],
         capture_output=True,
         text=True,
     )
@@ -35,3 +35,26 @@ def load_surface_mesh(input_mesh):
     vertices = torch.Tensor(surf_mesh.points).cuda()
     triangles = torch.Tensor(surf_mesh.cells[0].data).long().cuda()
     return vertices, triangles
+
+
+def tetra_from_mesh(input_mesh, log=False):
+    """
+    Create a tetrahedral mesh from a triangle mesh. Then read the surface mesh.
+    input: the path to the input mesh
+    output: the directory to store the output mesh
+    """
+    result = subprocess.run(
+        ["FloatTetwild_bin", "-i", input_mesh, "--max-threads", "8"],
+        capture_output=True,
+        text=True,
+    )
+    if log:
+        print(result.stdout, result.stderr)
+
+    tetra_file = input_mesh + "_.msh"
+    tetra_mesh = meshio.read(tetra_file)
+    # remove input_mesh_*
+    for f in glob(input_mesh + "_*"):
+        os.remove(f)
+
+    return tetra_mesh.points, tetra_mesh.cells[0].data

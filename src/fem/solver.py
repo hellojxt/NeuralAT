@@ -2,6 +2,7 @@ import os
 import numpy as np
 from torch.utils.cpp_extension import load
 import torch
+from ..mesh_loader import tetra_from_mesh
 
 
 def scipy2torch(M, device="cuda"):
@@ -128,6 +129,7 @@ import pymesh
 class SoundObj:
     def __init__(self, mesh_file):
         self.origin_mesh = pymesh.load_mesh(mesh_file)
+        self.mesh_file = mesh_file
         # print("original mesh data")
         # print("vertices: ", self.origin_mesh.vertices.shape)
         # print("faces: ", self.origin_mesh.faces.shape)
@@ -138,32 +140,13 @@ class SoundObj:
         # print("target cell_size: ", self.cell_size)
 
     def tetrahedralize(self, engine="cgal"):
-        self.tet_mesh = pymesh.tetrahedralize(
-            self.origin_mesh, self.cell_size, engine=engine
-        )
-        # print("tetrahedralized mesh data")
-        # print("vertices: ", self.tet_mesh.vertices.shape)
-        # print("faces: ", self.tet_mesh.faces.shape)
-        # print("voxels: ", self.tet_mesh.voxels.shape)
+        self.tet_vertices, self.tet_voxels = tetra_from_mesh(self.mesh_file)
 
     def modal_analysis(self, k=200, material=Material(MatSet.Plastic)):
-        self.fem_model = FEMmodel(
-            self.tet_mesh.vertices, self.tet_mesh.voxels, material
-        )
+        self.fem_model = FEMmodel(self.tet_vertices, self.tet_voxels, material)
         self.eigenvalues, self.eigenvectors = LOBPCG_solver(
             self.fem_model.stiffness_matrix, self.fem_model.mass_matrix, k + 6
         )
 
     def show_frequencys(self, num=20):
         print((self.eigenvalues**0.5 / (2 * np.pi))[:num])
-
-    def visualize_modes(self, viewer, num=200):
-        vecs_amp = (
-            self.eigenvectors.reshape(self.tet_mesh.vertices.shape[0], 3, -1) ** 2
-        ).sum(axis=1) ** 0.5
-        return viewer(
-            self.tet_mesh.vertices,
-            self.tet_mesh.faces,
-            vecs_amp.T[:num],
-            intensitymode="vertex",
-        ).show()

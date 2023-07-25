@@ -3,6 +3,7 @@ import sys
 sys.path.append("./")
 from src.mesh_loader import tetra_surf_from_triangle_mesh
 from src.fem.solver import FEMmodel, Material, MatSet, LOBPCG_solver, SoundObj
+from src.mesh_loader import tetra_from_mesh
 from glob import glob
 from tqdm import tqdm
 import pymesh
@@ -25,13 +26,9 @@ if not os.path.exists(neumann_dir):
 for mesh_file in tqdm(glob(mesh_dir + "/*.obj")):
     basename = os.path.basename(mesh_file)
     obj = SoundObj(mesh_file)
-    try:
-        obj.tetrahedralize(engine="cgal")
-    except:
-        print(mesh_file + " cgal tetrahedralize failed, skip")
-        continue
+    obj.tetrahedralize()
     obj.modal_analysis(k=mode_num, material=Material(MatSet.Plastic))
-    tree = KDTree(obj.tet_mesh.vertices)
+    tree = KDTree(obj.tet_vertices)
     origin_vertices = obj.origin_mesh.vertices
     # map origin vertices to tetrahedralized vertices
     _, idx = tree.query(origin_vertices)

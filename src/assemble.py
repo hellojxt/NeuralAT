@@ -43,13 +43,33 @@ CUDA_MODULE.load(Debug=False, MemoryCheck=False, Verbose=False)
 boundary_operator_assembler = CUDA_MODULE.get("assemble_matrix")
 
 
-def assemble_single_boundary_matrix(vertices, triangles, wave_number):
-    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
-    boundary_operator_assembler(vertices, triangles, matrix_cuda, wave_number, False)
+def assemble_single_boundary_matrix(
+    vertices, triangles, wave_number, test_indices=None
+):
+    if test_indices is None:
+        test_indices = torch.arange(triangles.shape[0], device="cuda").int()
+        matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
+    else:
+        matrix_cuda = torch.zeros(
+            test_indices.shape[0], triangles.shape[0], device="cuda"
+        )
+    boundary_operator_assembler(
+        vertices, triangles, test_indices, matrix_cuda, wave_number, False
+    )
     return matrix_cuda
 
 
-def assemble_double_boundary_matrix(vertices, triangles, wave_number):
-    matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
-    boundary_operator_assembler(vertices, triangles, matrix_cuda, wave_number, True)
+def assemble_double_boundary_matrix(
+    vertices, triangles, wave_number, test_indices=None
+):
+    if test_indices is None:
+        test_indices = torch.arange(triangles.shape[0], device="cuda").int()
+        matrix_cuda = torch.zeros(triangles.shape[0], triangles.shape[0], device="cuda")
+    else:
+        matrix_cuda = torch.zeros(
+            test_indices.shape[0], triangles.shape[0], device="cuda"
+        )
+    boundary_operator_assembler(
+        vertices, triangles, test_indices, matrix_cuda, wave_number, True
+    )
     return matrix_cuda

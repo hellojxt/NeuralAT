@@ -16,6 +16,7 @@ from src.assemble import (
 )
 from torch.utils.tensorboard import SummaryWriter
 import os
+import torchvision
 
 writer = SummaryWriter()
 
@@ -62,25 +63,28 @@ optimizer = torch.optim.Adam(parameters, lr=0.001)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 loss_func = torch.nn.SmoothL1Loss()
 
-import matplotlib.pyplot as plt
+if not os.path.exists("images"):
+    os.makedirs("images", exist_ok=True)
+
+from src.fem.visulize import viewer
 
 
-def plot_surf_data(predict, target):
-    fig = plt.figure(figsize=(16, 8))
-    ax1 = fig.add_subplot(211)
-    ax1.plot(predict.detach().cpu().numpy().reshape(-1))
-    ax1.set_title("predict")
-    ax2 = fig.add_subplot(212)
-    ax2.plot(target.detach().cpu().numpy().reshape(-1))
-    ax2.set_title("target")
-    # set same ylim
-    ylim = [
-        min(ax1.get_ylim()[0], ax2.get_ylim()[0]),
-        max(ax1.get_ylim()[1], ax2.get_ylim()[1]),
-    ]
-    ax1.set_ylim(ylim)
-    ax2.set_ylim(ylim)
-    return fig
+def plot_surf_data(predict, target, vertices, triangles):
+    image_path = f"images/{epoch}"
+    vertices = vertices.detach().cpu().numpy()
+    triangles = triangles.detach().cpu().numpy()
+    predict = predict.T.detach().cpu().numpy()
+    target = target.T.detach().cpu().numpy()
+    v1 = viewer(vertices, triangles, predict, intensitymode="cell", title="Predict")
+    v2 = viewer(vertices, triangles, target, intensitymode="cell", title="Target")
+    v1.set_camera(1, 1, 0.1)
+    v2.set_camera(1, 1, 0.1)
+    v1.save(image_path + "_predict.jpg")
+    v2.save(image_path + "_target.jpg")
+    return image_path + "_predict.jpg", image_path + "_target.jpg"
+
+
+log_step_num = 2
 
 
 def step(train=True):
@@ -114,24 +118,48 @@ def step(train=True):
             # TriMesh(vertices, triangles).save_obj(f"test_{graph_idx}.obj")
             freq = torch.rand([1, 1], device="cuda")
             wave_number = 5 + (freq * 40).item()
+            if i < log_step_num:
+                test_indices = torch.arange(triangles.shape[0], device="cuda").int()
+            else:
+                test_indices = torch.randint(
+                    0, triangles.shape[0], (32,), device="cuda"
+                ).int()
             single_matrix = assemble_single_boundary_matrix(
-                vertices, triangles, wave_number
+                vertices, triangles, wave_number, test_indices
             )
             double_matrix = assemble_double_boundary_matrix(
-                vertices, triangles, wave_number
+                vertices, triangles, wave_number, test_indices
             )
-            A = double_matrix - 0.5 * torch.eye(triangles.shape[0], device="cuda")
-            b = single_matrix @ data.neumann[mask] / scale_factor
+            # single_matrix = torch.zeros(
+            #     [triangles.shape[0], triangles.shape[0]], device="cuda"
+            # )
+            # double_matrix = torch.zeros(
+            #     [triangles.shape[0], triangles.shape[0]], device="cuda"
+            # )
             f_encoded = freq_encoder(freq)
             f_encoded = f_encoded.repeat(triangles.shape[0], 1)
             fused_feats = torch.cat([f_encoded, x_encoded[mask]], axis=1)
             predict = decoder(fused_feats).float()
-            loss = loss + loss_func(A @ predict, b)
-            if i < 5 and graph_idx == 0:
-                fig = plot_surf_data(A @ predict, b)
-                writer.add_figure(f"{'train' if train else 'test'}_{i}", fig, epoch)
-
-        loss = loss / args.batch_size
+            lhd = double_matrix @ predict - 0.5 * predict[test_indices]
+            rhd = single_matrix @ data.neumann[mask] / scale_factor
+            loss = loss + loss_func(lhd, rhd)
+            if i < log_step_num and graph_idx == 0:
+                predict_path, target_path = plot_surf_data(
+                    lhd, rhd, vertices, triangles
+                )
+                images = torch.stack(
+                    [
+                        torchvision.io.read_image(predict_path),
+                        torchvision.io.read_image(target_path),
+                    ]
+                )
+                writer.add_images(
+                    f"{'train' if train else 'test'}_{i}",
+                    images,
+                    epoch,
+                    dataformats="NCHW",
+                )
+        loss = loss / graph_num
         losses.append(loss.item())
         if train:
             loss.backward()

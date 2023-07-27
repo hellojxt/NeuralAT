@@ -56,6 +56,16 @@ for wave_number in [1, 10, 100]:
     single_matrix_cuda = assemble_single_boundary_matrix(
         vertices, triangles, wave_number
     )
+    test_indices = torch.randint(0, triangles.shape[0], (10,)).int().cuda()
+    single_matrix_cuda_part = assemble_single_boundary_matrix(
+        vertices, triangles, wave_number, test_indices
+    )
+    # check part
+    single_matrix_cuda_part_ = single_matrix_cuda[test_indices]
+    error = abs(single_matrix_cuda_part_ - single_matrix_cuda_part) / (
+        (single_matrix_cuda_part**2).mean() ** 0.5
+    )
+    print("part max error: ", error.max())
     torch.cuda.synchronize()
     t2 = time.time() - start_time
     error = abs(single_matrix_cuda - single_matrix_bempp) / (

@@ -18,12 +18,16 @@ pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -
 tiny-cuda-nn (modified for 1 dimension):
 ```bash
 pip install git+https://github.com/hellojxt/tiny-cuda-nn/#subdirectory=bindings/torch
-pip install commentjson
+```
+or clone the repository and install:
+```bash
+cd bindings/torch
+python setup.py install
 ```
 
 Other dependencies:
 ```bash
-pip install matplotlib tqdm
+pip install matplotlib tqdm commentjson
 ```
 
 ### Optional dependencies:

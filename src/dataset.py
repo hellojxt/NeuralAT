@@ -68,6 +68,7 @@ class MeshDataset(Dataset):
         # randomly select a neumann
         idx = torch.randint(0, neumann.shape[1], (1,)).item()
         neumann = neumann[:, idx].unsqueeze(1)
+        neumann = neumann / (neumann**2).mean() ** 0.5
         mesh = TriMesh(vertices, triangles)
         mesh.random_transform()
         vertices = mesh.vertices

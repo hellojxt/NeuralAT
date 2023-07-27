@@ -25,10 +25,19 @@ if not os.path.exists(neumann_dir):
 
 for mesh_file in tqdm(glob(mesh_dir + "/*.obj")):
     basename = os.path.basename(mesh_file)
-    obj = SoundObj(mesh_file)
-    if obj.origin_mesh.vertices.shape[0] > 15000:
+    output_name = neumann_dir + "/" + basename.replace(".sf.obj", ".pt")
+    if os.path.exists(output_name):
         continue
-    obj.tetrahedralize()
+    try:
+        obj = SoundObj(mesh_file)
+        if obj.origin_mesh.vertices.shape[0] > 15000:
+            continue
+        obj.tetrahedralize()
+    except:
+        print(mesh_file + " tetrahedralize failed")
+        for f in glob(mesh_file + "_*"):
+            os.remove(f)
+        continue
     obj.modal_analysis(k=mode_num, material=Material(MatSet.Plastic))
     tree = KDTree(obj.tet_vertices)
     origin_vertices = obj.origin_mesh.vertices
@@ -53,5 +62,5 @@ for mesh_file in tqdm(glob(mesh_dir + "/*.obj")):
             "triangles": triangles,
             "neumann": neumann,
         },
-        neumann_dir + "/" + basename.replace(".sf.obj", ".pt"),
+        output_name,
     )

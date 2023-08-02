@@ -66,8 +66,9 @@ class MeshDataset(Dataset):
         triangles = data["triangles"]
         neumann = data["neumann"]
         # randomly select a neumann
-        idx = torch.randint(0, neumann.shape[1], (1,)).item()
-        neumann = neumann[:, idx].unsqueeze(1)
+        neumann = neumann[:, torch.randint(0, neumann.shape[1], (1,)).item()].unsqueeze(
+            1
+        )
         neumann = neumann / (neumann**2).mean() ** 0.5
         mesh = TriMesh(vertices, triangles)
         mesh.random_transform()
@@ -80,6 +81,7 @@ class MeshDataset(Dataset):
         normal = torch.cross(v2 - v1, v3 - v1)
         x = torch.cat([v1 - pos, v2 - pos, v3 - pos, normal, pos, neumann], dim=1)
         vertices_offset = len(vertices)
+        freq = torch.rand(1)
         return Data(
             x=x,
             pos=pos,
@@ -87,4 +89,6 @@ class MeshDataset(Dataset):
             triangles=triangles,
             vertices_offset=vertices_offset,
             neumann=neumann,
+            idx=idx,
+            freq=freq,
         )

@@ -15,9 +15,9 @@ class BiCGSTAB:
 
     def matvec(self, x):
         if self.preconditioner is None:
-            return self.A(x)
+            return self.A @ x
         else:
-            return self.preconditioner(self.A(x))
+            return self.preconditioner(self.A @ x)
 
     def init_params(self, b, x=None, max_iter=None, tol=1e-10, atol=1e-16):
         """
@@ -27,16 +27,20 @@ class BiCGSTAB:
         atol:  Tolernace such that if ||r||^2 < atol then converged
         """
         self.b = b
-        self.x = torch.zeros(b.shape[0], device=self.device) if x is None else x
+        self.x = (
+            torch.zeros(b.shape[0], device=self.device, dtype=b.dtype)
+            if x is None
+            else x
+        )
         self.residual_tol = tol * torch.vdot(b, b).item()
-        self.atol = torch.tensor(atol, device=self.device)
+        self.atol = torch.tensor(atol, device=self.device, dtype=b.dtype)
         self.max_iter = b.shape[0] if max_iter is None else max_iter
         self.status, self.r = self.check_convergence(self.x)
-        self.rho = torch.tensor(1, device=self.device)
-        self.alpha = torch.tensor(1, device=self.device)
-        self.omega = torch.tensor(1, device=self.device)
-        self.v = torch.zeros(b.shape[0], device=self.device)
-        self.p = torch.zeros(b.shape[0], device=self.device)
+        self.rho = torch.tensor(1, device=self.device, dtype=b.dtype)
+        self.alpha = torch.tensor(1, device=self.device, dtype=b.dtype)
+        self.omega = torch.tensor(1, device=self.device, dtype=b.dtype)
+        self.v = torch.zeros(b.shape[0], device=self.device, dtype=b.dtype)
+        self.p = torch.zeros(b.shape[0], device=self.device, dtype=b.dtype)
         self.r_hat = self.r.clone().detach()
 
     def check_convergence(self, x):
@@ -80,7 +84,7 @@ class BiCGSTAB:
             self.r = s - self.omega * t  # r_i <- s - w_i t
             return False
 
-    def solve(self, b, x=None, max_iter=None, tol=1e-10, atol=1e-16):
+    def solve(self, b, x=None, max_iter=None, tol=1e-6, atol=1e-16):
         """
         Method to find the solution.
         Returns the final answer of x

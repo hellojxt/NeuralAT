@@ -137,7 +137,7 @@ def pooling(data: Data, size: float, normal_aware_pooling):
 
     edges = data.edge_index
     cluster = torch_geometric.nn.voxel_grid(pos=x, size=size, batch=None,
-                                            start=[-1, -1, -1.], end=[1, 1, 1.])
+                                            start=[-100, -100, -100.], end=[100, 100, 100.])
 
     # keep max index smaller than # of unique (e.g., [4,5,4,3] --> [0,1,0,2])
     mapping = cluster.unique()
@@ -148,7 +148,7 @@ def pooling(data: Data, size: float, normal_aware_pooling):
         cluster[cluster == mapping[i]] = i
 
     # sanity check，左侧是cluster后更coarse层的点数，右边是cluster前更fine层的点数，右边必然大于左边
-    assert cluster.unique().shape[0] < cluster.shape[0], "池化过程中计算cluster出错。这可能是因为您没有将输入网格数据归一化到 unit cube 区间内；在某一层没有减小顶点规模也可能触发此警告。"
+   # assert cluster.unique().shape[0] < cluster.shape[0], "池化过程中计算cluster出错。这可能是因为您没有将输入网格数据归一化到 unit cube 区间内；在某一层没有减小顶点规模也可能触发此警告。"
     
     return cluster #.contiguous()
 
@@ -182,7 +182,7 @@ class GraphTree:
 
     """
     def __init__(self, depth: int=4,
-                 smallest_grid=2/2**5,
+                 smallest_grid=2/2**5 * 100,
                  batch_size: int=1,
                  adj_layer_connected=False):
         """

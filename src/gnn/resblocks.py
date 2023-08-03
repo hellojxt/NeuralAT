@@ -1,8 +1,8 @@
 import torch
 import torch.utils.checkpoint
 
-from src.graphtree.graph_tree import GraphTree
-from src.modules.blocks import Conv1x1BnRelu, Conv1x1, Conv1x1Bn, \
+from src.gnn.graph_tree import GraphTree
+from src.gnn.blocks import Conv1x1BnRelu, Conv1x1, Conv1x1Bn, \
     GraphConv, GraphConvBnRelu, GraphConvBn, FcBnRelu, \
     UnpoolingGraph, PoolingGraph
 

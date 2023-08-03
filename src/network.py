@@ -11,6 +11,9 @@ from torch_geometric.nn import (
 )
 
 
+from src.network_gegnn import GraphUNetWrapper
+
+
 class SAModule(torch.nn.Module):
     def __init__(self, ratio, r, nn):
         super().__init__()

@@ -7,12 +7,13 @@ import numpy as np
 
 
 def remesh_single_obj(
-    input_path="abc.obj", output_path="abc_2.obj", iterations=8, percentage=3.0
+    input_path="abc.obj", output_path="abc_2.obj", iterations=8, percentage=3.0, normalize=False
 ):
     # remesh a single objecct so that the area of each face is roughly the same
     # not supported on arm macs
     # iterations: number of iterations, higher iter will result in more uniform mesh but longer time
     # percentage: average length of the output edges. 3 means 3%, and will lead to about 1~2k vertices in the output mesh
+    # additionally, this script will normalize the mesh into the cube of [-1,1]^3
 
     ms = pymeshlab.MeshSet()
     ms.load_new_mesh(input_path)
@@ -23,6 +24,14 @@ def remesh_single_obj(
         iterations=iterations,
         targetlen=target_len,
     )
+    if normalize:
+        # ...normalize the mesh into [-1, 1]^3
+        scale_x = ms.current_mesh().vertex_matrix()[:, 0].max() - ms.current_mesh().vertex_matrix()[:, 0].min()
+        scale_y = ms.current_mesh().vertex_matrix()[:, 1].max() - ms.current_mesh().vertex_matrix()[:, 1].min()
+        scale_z = ms.current_mesh().vertex_matrix()[:, 2].max() - ms.current_mesh().vertex_matrix()[:, 2].min()
+        scale_all = max(scale_x, scale_y, scale_z)
+        ms.apply_filter('compute_matrix_from_scaling_or_normalization', axisx=scale_all, axisy=scale_all, axisz=scale_all)
+    
     ms.save_current_mesh(output_path, save_vertex_normal=False, save_textures=False)
 
 

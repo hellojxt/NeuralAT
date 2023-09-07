@@ -196,44 +196,45 @@ enum
     POSSION = 0,
     HELMHOLTZ = 1,
 };
-
-template <int type>
-HOST_DEVICE inline complex Green_func(float3 y, float3 x, float k);
-
-template <int type>
-HOST_DEVICE inline complex Green_func_deriv(float3 y, float3 x, float3 xn, float k);
+#define EPS 0.01
+template <int type, bool deriv>
+HOST_DEVICE inline complex Green_func(float3 y, float3 x, float3 xn, float k);
 
 template <>
-HOST_DEVICE inline complex Green_func<HELMHOLTZ>(float3 y, float3 x, float k)
+HOST_DEVICE inline complex Green_func<HELMHOLTZ, false>(float3 y, float3 x, float3 xn, float k)
 {
     float r = length(x - y);
-    if (r < 1e-6)
-        return complex(0, 0);
+    if (r < EPS)
+        r = EPS;
     return exp(complex(0, k * r)) / (4 * M_PI * r);
 }
 
 template <>
-HOST_DEVICE inline complex Green_func_deriv<HELMHOLTZ>(float3 y, float3 x, float3 xn, float k)
+HOST_DEVICE inline complex Green_func<HELMHOLTZ, true>(float3 y, float3 x, float3 xn, float k)
 {
     float r = length(x - y);
-    if (r < 1e-6)
-        return complex(0, 0);
+    if (r < EPS)
+        r = EPS;
     complex ikr = complex(0, 1) * r * k;
     complex potential = -exp(ikr) / (4 * M_PI * r * r * r) * (1 - ikr) * dot(x - y, xn);
     return potential;
 }
 
 template <>
-HOST_DEVICE inline complex Green_func<POSSION>(float3 y, float3 x, float k)
+HOST_DEVICE inline complex Green_func<POSSION, false>(float3 y, float3 x, float3 xn, float k)
 {
     float r = length(x - y);
+    if (r < EPS)
+        r = EPS;
     return 1 / (4 * M_PI * r);
 }
 
 template <>
-HOST_DEVICE inline complex Green_func_deriv<POSSION>(float3 y, float3 x, float3 xn, float k)
+HOST_DEVICE inline complex Green_func<POSSION, true>(float3 y, float3 x, float3 xn, float k)
 {
     float r = length(x - y);
+    if (r < EPS)
+        r = EPS;
     return -1 / (4 * M_PI * r * r * r) * dot(x - y, xn);
 }
 

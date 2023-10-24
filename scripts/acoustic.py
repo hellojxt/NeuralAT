@@ -22,26 +22,26 @@ triangle_neumann = torch.tensor(
 k = sound_object.get_wave_number(mode_idx)
 print("k: ", k)
 
-bem_model = BEMModel(
-    sound_object.vertices,
-    sound_object.triangles,
-    k,
-)
-bem_model.boundary_equation_solve(triangle_neumann.cpu().numpy())
-dirichlet = bem_model.get_dirichlet_coeff().reshape(-1, 1).real
-print(vertices.shape, dirichlet.shape)
-get_figure(
-    vertices.cpu().numpy(),
-    dirichlet.reshape(-1, 1),
-).show()
+# bem_model = BEMModel(
+#     sound_object.vertices,
+#     sound_object.triangles,
+#     k,
+# )
+# bem_model.boundary_equation_solve(triangle_neumann.cpu().numpy())
+# dirichlet = bem_model.get_dirichlet_coeff().reshape(-1, 1).real
+# print(vertices.shape, dirichlet.shape)
+# get_figure(
+#     vertices.cpu().numpy(),
+#     dirichlet.reshape(-1, 1),
+# ).show()
 
 model = get_mlps(True)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.9)
-N = 2048
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 100, 0.9)
+N = 4096
 M = 1024
-max_epochs = 20
+max_epochs = 1000
 
 importance = torch.ones(triangles.shape[0], 1, dtype=torch.float32).cuda()
 sampler_src = ImportanceSampler(vertices, triangles, importance, M, triangle_neumann)
@@ -51,6 +51,8 @@ G1_constructor = MonteCarloWeight(sampler_trg, sampler_src, k, deriv=True)
 
 x0 = torch.zeros(1, 3, dtype=torch.float32).cuda()
 
+
+loss_lst = []
 for epoch in range(max_epochs):
     sampler_src.update()
     sampler_trg.update()
@@ -58,8 +60,15 @@ for epoch in range(max_epochs):
     # neumann_src = batch_green_func(
     #     x0, sampler_src.points, sampler_src.points_normals, k, True
     # ).reshape(-1, 1)
-    dirichlet_src = model(sampler_src.points).float()
-    dirichlet_trg = model(sampler_trg.points).float()
+
+    src_inputs = torch.cat(
+        [sampler_src.points, sampler_src.points_normals], dim=1
+    ).float()
+    trg_inputs = torch.cat(
+        [sampler_trg.points, sampler_trg.points_normals], dim=1
+    ).float()
+    dirichlet_src = model(src_inputs).float()
+    dirichlet_trg = model(trg_inputs).float()
     G0 = G0_constructor.get_weights()
     G1 = G1_constructor.get_weights()
     LHS = dirichlet_trg - G1 @ dirichlet_src
@@ -68,7 +77,16 @@ for epoch in range(max_epochs):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    scheduler.step()
     print("Epoch: {}, Loss: {}".format(epoch, loss.item()))
+    loss_lst.append(loss.item())
+
+from matplotlib import pyplot as plt
+
+loss_lst = np.array(loss_lst).reshape(-1, 10).mean(axis=1)
+print(loss_lst.shape)
+plt.plot(loss_lst)
+plt.show()
 
 data = torch.cat([LHS, RHS], dim=1).detach().cpu().numpy()
 coords = sampler_trg.points.detach().cpu().numpy()

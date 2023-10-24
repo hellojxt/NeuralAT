@@ -7,7 +7,7 @@
 #include <thrust/execution_policy.h>
 using namespace nwob;
 
-#define EPS 1e-2
+#define EPS 1e-3
 template <bool deriv>
 HOST_DEVICE inline complex Green_func(float3 y, float3 x, float3 xn, float k);
 

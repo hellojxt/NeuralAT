@@ -67,12 +67,16 @@ torch::Tensor get_cdf(const torch::Tensor vertices,
 void importance_sample(const torch::Tensor vertices,
                        const torch::Tensor triangles,
                        torch::Tensor triangles_importance,
+                       torch::Tensor triangles_neumann,
                        torch::Tensor cdf,
                        int num_samples,
                        torch::Tensor random_states,
                        torch::Tensor points,
                        torch::Tensor points_normals,
-                       torch::Tensor points_importance)
+                       torch::Tensor points_importance,
+                       torch::Tensor points_neumann,
+                       torch::Tensor points_index)
+
 {
     int vertices_size = vertices.size(0);
     int triangles_size = triangles.size(0);
@@ -80,8 +84,10 @@ void importance_sample(const torch::Tensor vertices,
                  [vertices = (float3 *)vertices.data_ptr(), triangles = (int3 *)triangles.data_ptr(),
                   cdf = (float *)cdf.data_ptr(), points = (float3 *)points.data_ptr(),
                   triangles_importance = (float *)triangles_importance.data_ptr(),
+                  triangles_neumann = (float *)triangles_neumann.data_ptr(),
                   points_normals = (float3 *)points_normals.data_ptr(),
                   points_importance = (float *)points_importance.data_ptr(),
+                  points_neumann = (float *)points_neumann.data_ptr(), points_index = (int *)points_index.data_ptr(),
                   random_states = (randomState *)random_states.data_ptr(), triangles_size] __device__(int i) {
                      float x = curand_uniform(&random_states[i]) * cdf[triangles_size - 1];
                      // binary search
@@ -109,6 +115,8 @@ void importance_sample(const torch::Tensor vertices,
                      points[i] = v0 * u + v1 * v + v2 * w;
                      points_normals[i] = normalize(cross(v1 - v0, v2 - v0));
                      points_importance[i] = triangles_importance[element_id];
+                     points_neumann[i] = triangles_neumann[element_id];
+                     points_index[i] = element_id;
                  });
 }
 

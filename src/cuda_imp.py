@@ -48,20 +48,7 @@ def check_tensor(tensor, dtype):
 
 
 class ImportanceSampler:
-    def __init__(self, vertices, triangles, importance, num_samples):
-        """
-        Initialize a uniform sampler.
-        Args:
-            vertices: (V, 3) float32 tensor of vertices
-            triangles: (T, 3) int32 tensor of vertex indices
-            importance: (T, 1) float32 tensor of triangle importances
-            num_samples: number of samples to take
-
-        Members:
-            points: (num_samples, 3) float32 tensor of sampled points
-            points_normals: (num_samples, 3) float32 tensor of sampled points normals
-            points_importance: (num_samples, 1) float32 tensor of sampled points importances
-        """
+    def __init__(self, vertices, triangles, importance, num_samples, neumann_coeff = None):
         check_tensor(vertices, torch.float32)
         check_tensor(triangles, torch.int32)
         self.vertices = vertices
@@ -79,6 +66,15 @@ class ImportanceSampler:
             (num_samples), dtype=torch.float32, device=self.vertices.device
         )
         self.num_samples = num_samples
+        if neumann_coeff is None:
+            neumann_coeff = torch.ones(len(self.triangles), dtype=torch.float32, device=self.vertices.device)
+        self.triangle_neumann = neumann_coeff.float().reshape(-1, 1)
+        self.points_neumann = torch.empty(
+            (num_samples, 1), dtype=torch.float32, device=self.vertices.device
+        )
+        self.points_index = torch.empty(
+            (num_samples), dtype=torch.int32, device=self.vertices.device
+        )
 
     def update(self):
         """
@@ -88,13 +84,17 @@ class ImportanceSampler:
             self.vertices,
             self.triangles,
             self.triangle_importance,
+            self.triangle_neumann,
             self.cdf,
             self.num_samples,
             self.random_state,
             self.points,
             self.points_normals,
             self.points_importance,
+            self.points_neumann,
+            self.points_index,
         )
+
 
 
 class MonteCarloWeight:

@@ -18,6 +18,21 @@ def update_normals(vertices, triangles):
     return normals
 
 
+def update_vertex_normals(vertices, triangles, triangle_normals):
+    """
+    vertices: (n, 3)
+    triangles: (m, 3)
+    triangle_normals: (m, 3)
+    """
+    vertex_normals = np.zeros_like(vertices)
+    for i in range(3):
+        vertex_normals[triangles[:, i]] += triangle_normals
+    vertex_normals = vertex_normals / np.linalg.norm(
+        vertex_normals, axis=1, keepdims=True
+    )
+    return vertex_normals
+
+
 class ModalSoundObject:
     def __init__(self, data_dir):
         basename = os.path.basename(data_dir)
@@ -34,6 +49,9 @@ class ModalSoundObject:
         self.vertices = mesh.points
         self.triangles = mesh.cells_dict["triangle"]
         self.triangles_normal = update_normals(self.vertices, self.triangles)
+        self.vertices_normal = update_vertex_normals(
+            self.vertices, self.triangles, self.triangles_normal
+        )
         self.bbox_min = self.vertices.min(axis=0)
         self.bbox_max = self.vertices.max(axis=0)
 

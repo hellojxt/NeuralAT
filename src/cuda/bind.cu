@@ -122,7 +122,6 @@ void importance_sample(const torch::Tensor vertices,
 
 template <bool deriv>
 void get_monte_carlo_weight(const torch::Tensor trg_points,
-                            const torch::Tensor trg_importance,
                             const torch::Tensor src_points,
                             const torch::Tensor src_normals,
                             const torch::Tensor src_importance,
@@ -139,26 +138,25 @@ void get_monte_carlo_weight(const torch::Tensor trg_points,
             atomicAdd(&near_point_num[i / M], 1);
     });
 
-    parallel_for(
-        N * M, [N, M, k, cdf_sum, trgs = (float3 *)trg_points.data_ptr(), srcs = (float3 *)src_points.data_ptr(),
-                src_normals = (float3 *)src_normals.data_ptr(), out = (float *)out.data_ptr(),
-                near_point_num = near_point_num.device_ptr(), src_importance = (float *)src_importance.data_ptr(),
-                trg_importance = (float *)trg_importance.data_ptr()] __device__(int i) {
-            int trg_i = i / M, src_i = i % M;
-            float3 trg = trgs[trg_i];
-            float3 src = srcs[src_i];
-            float3 normal = src_normals[src_i];
-            out[i] = Green_func<deriv>(trg, src, normal, k).real();
-            float near_field_cdf_sum = M_PI * EPS * EPS * src_importance[src_i];
-            if (length(trg - src) < EPS)
-            {
-                out[i] *= 2 * (2 * M_PI * EPS) / near_point_num[trg_i];
-            }
-            else
-            {
-                out[i] *= 2 * (cdf_sum - near_field_cdf_sum) / src_importance[src_i] / (M - near_point_num[trg_i]);
-            }
-        });
+    parallel_for(N * M, [N, M, k, cdf_sum, trgs = (float3 *)trg_points.data_ptr(),
+                         srcs = (float3 *)src_points.data_ptr(), src_normals = (float3 *)src_normals.data_ptr(),
+                         out = (float *)out.data_ptr(), near_point_num = near_point_num.device_ptr(),
+                         src_importance = (float *)src_importance.data_ptr()] __device__(int i) {
+        int trg_i = i / M, src_i = i % M;
+        float3 trg = trgs[trg_i];
+        float3 src = srcs[src_i];
+        float3 normal = src_normals[src_i];
+        out[i] = Green_func<deriv>(trg, src, normal, k).real();
+        float near_field_cdf_sum = M_PI * EPS * EPS * src_importance[src_i];
+        if (length(trg - src) < EPS)
+        {
+            out[i] *= 2 * (2 * M_PI * EPS) / near_point_num[trg_i];
+        }
+        else
+        {
+            out[i] *= 2 * (cdf_sum - near_field_cdf_sum) / src_importance[src_i] / (M - near_point_num[trg_i]);
+        }
+    });
 }
 
 template <bool deriv>

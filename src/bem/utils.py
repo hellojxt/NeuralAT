@@ -41,5 +41,5 @@ def ffat_cube_points(bbox_min, bbox_max, res):
     points = unit_cube_surface_points_(res)
     points = points.reshape(-1, 3)
     points = points * (bbox_max - bbox_min) + (bbox_max + bbox_min) / 2
-    points = points.reshape(6, res, res, 3)
+    points = points.reshape(6 * res, res, 3)
     return points

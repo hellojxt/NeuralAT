@@ -48,7 +48,9 @@ def check_tensor(tensor, dtype):
 
 
 class ImportanceSampler:
-    def __init__(self, vertices, triangles, importance, num_samples, neumann_coeff = None):
+    def __init__(
+        self, vertices, triangles, importance, num_samples, neumann_coeff=None
+    ):
         check_tensor(vertices, torch.float32)
         check_tensor(triangles, torch.int32)
         self.vertices = vertices
@@ -67,7 +69,9 @@ class ImportanceSampler:
         )
         self.num_samples = num_samples
         if neumann_coeff is None:
-            neumann_coeff = torch.ones(len(self.triangles), dtype=torch.float32, device=self.vertices.device)
+            neumann_coeff = torch.ones(
+                len(self.triangles), dtype=torch.float32, device=self.vertices.device
+            )
         self.triangle_neumann = neumann_coeff.float().reshape(-1, 1)
         self.points_neumann = torch.empty(
             (num_samples, 1), dtype=torch.float32, device=self.vertices.device
@@ -96,37 +100,16 @@ class ImportanceSampler:
         )
 
 
-
 class MonteCarloWeight:
-    def __init__(
-        self,
-        trg_sample: ImportanceSampler,
-        src_sample: ImportanceSampler,
-        k,
-        N=None,
-        M=None,
-        deriv=False,
-    ):
-        """
-        Compute the Green function for a batch of target points and a batch of source points.
-        Args:
-            trg_sample: ImportanceSampler for target points
-            src_sample: ImportanceSampler for source points
-            k: float32 tensor of wave number
-            deriv: whether to compute the derivative of the Green function
-        Members:
-            weights: (num_trg_samples, num_src_samples) float32 tensor
-        """
+    def __init__(self, trg_points, src_sample, k, deriv=False):
         self.src_sample = src_sample
-        self.trg_sample = trg_sample
-        if N is None:
-            N = trg_sample.num_samples
-        if M is None:
-            M = src_sample.num_samples
+        self.trg_points = trg_points
+        N = trg_points.shape[0]
+        M = src_sample.num_samples
         self.weights_ = torch.empty(
             (N, M),
             dtype=torch.float32,
-            device=trg_sample.vertices.device,
+            device=trg_points.device,
         )
         self.k = k
         self.deriv = deriv
@@ -137,8 +120,7 @@ class MonteCarloWeight:
         """
         cuda_method_name = "get_monte_carlo_weight" + str(int(self.deriv))
         CUDA_MODULE.get(cuda_method_name)(
-            self.trg_sample.points,
-            self.trg_sample.points_importance,
+            self.trg_points,
             self.src_sample.points,
             self.src_sample.points_normals,
             self.src_sample.points_importance,

@@ -40,6 +40,9 @@ class ModalSoundObject:
         self.model_file = os.path.join(data_dir, basename + ".tet.obj")
         self.material_file = os.path.join(data_dir, basename + "_material.txt")
         self.ffat_dir = os.path.join(data_dir, basename + "_ffat_maps")
+        self.dirichlet_dir = os.path.join(data_dir, basename + "_dirichlet")
+        if not os.path.exists(self.dirichlet_dir):
+            os.makedirs(self.dirichlet_dir)
 
         self.nDOF, self.nModes, self.omega_squared, self.modes = read_mode_data(
             self.mode_file

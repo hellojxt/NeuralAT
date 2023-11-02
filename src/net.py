@@ -8,7 +8,7 @@ encoding_cfg = {
         {
             "n_dims_to_encode": 3,
             "otype": "Grid",
-            "n_levels": 4,
+            "n_levels": 8,
             "n_features_per_level": 2,
             "base_resolution": 16,
             "per_level_scale": 2.0,
@@ -22,7 +22,7 @@ network_cfg = {
     "activation": "ReLU",
     "output_activation": "None",
     "n_neurons": 128,
-    "n_hidden_layers": 1,
+    "n_hidden_layers": 3,
 }
 
 

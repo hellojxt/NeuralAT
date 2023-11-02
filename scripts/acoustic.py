@@ -3,16 +3,16 @@ import sys
 sys.path.append("./")
 
 import torch
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight, batch_green_func
+from src.cuda_imp import Sampler
 from src.bem.bempp import BEMModel
 from src.bem.utils import ffat_cube_points
 from src.loader.model import ModalSoundObject
 import numpy as np
 from src.net import get_mlps
-from src.visualize import get_figure
+from src.visualize import plot_mesh, plot_point_cloud
+import os
 
-mode_idx = 0
-
+mode_idx = 4
 sound_object = ModalSoundObject("dataset/00002")
 vertices = torch.tensor(sound_object.vertices, dtype=torch.float32).cuda()
 triangles = torch.tensor(sound_object.triangles, dtype=torch.int32).cuda()
@@ -22,79 +22,58 @@ triangle_neumann = torch.tensor(
 k = sound_object.get_wave_number(mode_idx)
 print("k: ", k)
 
-bem_model = BEMModel(
-    sound_object.vertices,
-    sound_object.triangles,
-    k,
+
+dirichlet_path = os.path.join(sound_object.dirichlet_dir, f"{mode_idx}.npy")
+if not os.path.exists(dirichlet_path):
+    bem_model = BEMModel(
+        sound_object.vertices,
+        sound_object.triangles,
+        k,
+    )
+    bem_model.boundary_equation_solve(triangle_neumann.cpu().numpy())
+    dirichlet = bem_model.get_dirichlet_coeff().reshape(-1, 1).real
+    np.save(dirichlet_path, dirichlet)
+dirichlet_gt = np.load(dirichlet_path)
+
+model = get_mlps(True)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.8)
+max_epochs = 100
+
+importance = torch.ones(triangles.shape[0], 1, dtype=torch.float32).cuda()
+points_sampler = Sampler(vertices, triangles, triangle_neumann, importance, 2)
+
+
+import time
+
+torch.autograd.set_detect_anomaly(True)
+for epoch in range(max_epochs):
+    points_sampler.sample_points(k, candidate_num=1, reuse_num=0)
+    dirichlet_trg = model(points_sampler.trg_points)
+    dirichlet_src = model(points_sampler.src_points)
+
+    # print(dirichlet_trg.max(), dirichlet_trg.min())
+    # print(dirichlet_src.max(), dirichlet_src.min())
+    # print(points_sampler.A.max(), points_sampler.A.min())
+    # print(points_sampler.B.max(), points_sampler.B.min())
+    LHS = dirichlet_trg
+    RHS = points_sampler.A * dirichlet_src + points_sampler.B
+    loss = ((0.5 * LHS - RHS) ** 2).mean()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    scheduler.step()
+    print("epoch: {}, loss: {}".format(epoch, loss.item()))
+
+vertices_normal = torch.tensor(sound_object.vertices_normal).cuda()
+dirichlet_vertices = model(torch.cat([vertices, vertices_normal], dim=1))
+dirichlet = dirichlet_vertices.detach().cpu().numpy()
+features = np.concatenate(
+    [dirichlet_gt.reshape(-1, 1), dirichlet.reshape(-1, 1)], axis=1
 )
-bem_model.boundary_equation_solve(triangle_neumann.cpu().numpy())
-dirichlet = bem_model.get_dirichlet_coeff().reshape(-1, 1).real
-print(vertices.shape, dirichlet.shape)
-get_figure(
+plot_mesh(
     vertices.cpu().numpy(),
-    dirichlet.reshape(-1, 1),
+    triangles.cpu().numpy(),
+    features,
 ).show()
-points = ffat_cube_points(*sound_object.scaled_bbox(1.25), 128)
-ffat_map = bem_model.potential_solve(points)
-import matplotlib.pyplot as plt
-
-plt.imshow(ffat_map)
-plt.savefig("ffat_map.png")
-
-# model = get_mlps(True)
-
-# optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 100, 0.9)
-# N = 4096
-# M = 1024
-# max_epochs = 1000
-
-# importance = torch.ones(triangles.shape[0], 1, dtype=torch.float32).cuda()
-# sampler_src = ImportanceSampler(vertices, triangles, importance, M, triangle_neumann)
-# sampler_trg = ImportanceSampler(vertices, triangles, importance, N)
-# G0_constructor = MonteCarloWeight(sampler_trg, sampler_src, k)
-# G1_constructor = MonteCarloWeight(sampler_trg, sampler_src, k, deriv=True)
-
-# x0 = torch.zeros(1, 3, dtype=torch.float32).cuda()
-
-
-# loss_lst = []
-# for epoch in range(max_epochs):
-#     sampler_src.update()
-#     sampler_trg.update()
-#     neumann_src = sampler_src.points_neumann
-#     # neumann_src = batch_green_func(
-#     #     x0, sampler_src.points, sampler_src.points_normals, k, True
-#     # ).reshape(-1, 1)
-
-#     src_inputs = torch.cat(
-#         [sampler_src.points, sampler_src.points_normals], dim=1
-#     ).float()
-#     trg_inputs = torch.cat(
-#         [sampler_trg.points, sampler_trg.points_normals], dim=1
-#     ).float()
-#     dirichlet_src = model(src_inputs).float()
-#     dirichlet_trg = model(trg_inputs).float()
-#     G0 = G0_constructor.get_weights()
-#     G1 = G1_constructor.get_weights()
-#     LHS = dirichlet_trg - G1 @ dirichlet_src
-#     RHS = -G0 @ neumann_src
-#     loss = ((LHS - RHS) ** 2).mean()
-#     optimizer.zero_grad()
-#     loss.backward()
-#     optimizer.step()
-#     scheduler.step()
-#     print("Epoch: {}, Loss: {}".format(epoch, loss.item()))
-#     loss_lst.append(loss.item())
-
-# from matplotlib import pyplot as plt
-
-# loss_lst = np.array(loss_lst).reshape(-1, 10).mean(axis=1)
-# print(loss_lst.shape)
-# plt.plot(loss_lst)
-# plt.savefig("loss.png")
-
-# data = torch.cat([LHS, RHS], dim=1).detach().cpu().numpy()
-# coords = sampler_trg.points.detach().cpu().numpy()
-
-# get_figure(coords, data).show()

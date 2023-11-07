@@ -22,17 +22,17 @@ network_cfg = {
     "activation": "ReLU",
     "output_activation": "None",
     "n_neurons": 128,
-    "n_hidden_layers": 3,
+    "n_hidden_layers": 2,
 }
 
 
-def get_mlps(use_tcnn=True):
+def get_mlps(out_channel, use_tcnn=True):
     n_dims_to_encode = 0
     for cfg in encoding_cfg["nested"]:
         n_dims_to_encode += cfg["n_dims_to_encode"]
     if use_tcnn:
         return tcnn.NetworkWithInputEncoding(
-            n_dims_to_encode, 1, encoding_cfg, network_cfg
+            n_dims_to_encode, out_channel, encoding_cfg, network_cfg
         )
     else:
         encoding = tcnn.Encoding(n_dims_to_encode, encoding_cfg, dtype=torch.float32)
@@ -43,5 +43,5 @@ def get_mlps(use_tcnn=True):
                 torch.nn.Linear(network_cfg["n_neurons"], network_cfg["n_neurons"])
             )
         layers.append(torch.nn.ReLU())
-        layers.append(torch.nn.Linear(network_cfg["n_neurons"], 1))
+        layers.append(torch.nn.Linear(network_cfg["n_neurons"], out_channel))
         return torch.nn.Sequential(encoding, *layers).cuda()

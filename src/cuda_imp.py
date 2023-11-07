@@ -41,78 +41,120 @@ class CUDA_MODULE:
 CUDA_MODULE.load(Debug=True, MemoryCheck=False, Verbose=False)
 
 
-def check_tensor(x, name, type=torch.float32):
-    if not isinstance(x, torch.Tensor):
-        raise TypeError(f"{name} must be a torch.Tensor")
-    if x.dtype != type:
-        raise TypeError(f"{name} must be a {type} tensor")
-    if not x.is_cuda:
-        raise TypeError(f"{name} must be a CUDA tensor")
+def check_tensor(tensor, dtype):
+    assert tensor.dtype == dtype
+    assert tensor.is_cuda
+    assert tensor.is_contiguous()
 
 
-class Sampler:
+class ImportanceSampler:
     def __init__(
-        self,
-        vertices,
-        triangles,
-        triangle_neumann,
-        triangle_importance=None,
-        alias_factor=8,
+        self, vertices, triangles, importance, num_samples, neumann_coeff=None
     ):
-        check_tensor(vertices, "vertices", torch.float32)
-        check_tensor(triangles, "triangles", torch.int32)
-        check_tensor(triangle_neumann, "triangle_neumann", torch.float32)
-        if triangle_importance is not None:
-            check_tensor(triangle_importance, "triangle_importance", torch.float32)
+        check_tensor(vertices, torch.float32)
+        check_tensor(triangles, torch.int32)
         self.vertices = vertices
         self.triangles = triangles
-        self.bbox_min = vertices.min(dim=0)[0]
-        self.bbox_max = vertices.max(dim=0)[0]
-        self.bbox_max_len = (self.bbox_max - self.bbox_min).max()
-        self.triangle_neumann = triangle_neumann
-        self.triangle_importance = triangle_importance
-        self.alias_factor = alias_factor
-        self.sample_table = CUDA_MODULE.get("get_sample_table")(
+        self.triangle_importance = importance
+        self.cdf = CUDA_MODULE.get("get_cdf")(vertices, triangles, importance)
+        self.random_state = CUDA_MODULE.get("get_random_states")(num_samples)
+        self.points = torch.empty(
+            (num_samples, 3), dtype=torch.float32, device=self.vertices.device
+        )
+        self.points_normals = torch.empty(
+            (num_samples, 3), dtype=torch.float32, device=self.vertices.device
+        )
+        self.points_importance = torch.empty(
+            (num_samples), dtype=torch.float32, device=self.vertices.device
+        )
+        self.num_samples = num_samples
+        if neumann_coeff is None:
+            neumann_coeff = torch.ones(
+                len(self.triangles), dtype=torch.float32, device=self.vertices.device
+            )
+        self.triangle_neumann = neumann_coeff.float().reshape(-1, 1)
+        self.points_neumann = torch.empty(
+            (num_samples, 1), dtype=torch.float32, device=self.vertices.device
+        )
+        self.points_index = torch.empty(
+            (num_samples), dtype=torch.int32, device=self.vertices.device
+        )
+
+    def update(self):
+        """
+        Sample points on the surface of the mesh.
+        """
+        CUDA_MODULE.get("importance_sample")(
             self.vertices,
             self.triangles,
             self.triangle_importance,
             self.triangle_neumann,
-            self.alias_factor,
+            self.cdf,
+            self.num_samples,
+            self.random_state,
+            self.points,
+            self.points_normals,
+            self.points_importance,
+            self.points_neumann,
+            self.points_index,
         )
-        self.point_pairs = CUDA_MODULE.get("allocate_sample_memory")(self.sample_table)
-        self.num_samples = self.point_pairs.shape[0]
-        self.src_points = torch.empty(
-            self.num_samples, 6, dtype=torch.float32, device="cuda"
-        )
-        self.trg_points = torch.empty(
-            self.num_samples, 6, dtype=torch.float32, device="cuda"
-        )
-        self.A = torch.empty(self.num_samples, 1, dtype=torch.float32, device="cuda")
-        self.B = torch.empty(self.num_samples, 1, dtype=torch.float32, device="cuda")
-        # dirichlet_trg = A * dirichlet_src + B
 
-    def print_sample_table(self):
-        CUDA_MODULE.get("print_alias_table")(self.sample_table)
 
-    def print_point_pairs(self):
-        CUDA_MODULE.get("print_point_pairs")(self.point_pairs)
-
-    def sample_points(
-        self,
-        wave_number,
-        reuse_num=0,
-        candidate_num=1,
-    ):
-        CUDA_MODULE.get("sample_alias_table")(
-            self.sample_table, self.point_pairs, reuse_num, candidate_num
+class MonteCarloWeight:
+    def __init__(self, trg_points, src_sample, k, deriv=False):
+        self.src_sample = src_sample
+        self.trg_points = trg_points
+        N = trg_points.shape[0]
+        M = src_sample.num_samples
+        self.weights_ = torch.empty(
+            (N, M, 2),
+            dtype=torch.float32,
+            device=trg_points.device,
         )
-        CUDA_MODULE.get("get_equation_AB")(
-            self.point_pairs,
-            self.src_points,
+        self.k = k
+        self.deriv = deriv
+
+    def get_weights(self):
+        """
+        Compute the Green function for a batch of target points and a batch of source points.
+        """
+        cuda_method_name = "get_monte_carlo_weight" + str(int(self.deriv))
+        CUDA_MODULE.get(cuda_method_name)(
             self.trg_points,
-            self.A,
-            self.B,
-            wave_number,
-            self.bbox_min,
-            self.bbox_max_len,
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            self.k,
+            self.src_sample.cdf[-1],
+            self.weights_,
         )
+        return torch.view_as_complex(self.weights_)
+
+
+def batch_green_func(trg_points, src_points, src_normal, k, deriv=False):
+    """
+    Compute the Green function for a batch of target points and a batch of source points.
+    Args:
+        trg_points: (num_trg_samples, 3) float32 tensor of target points
+        src_points: (num_src_samples, 3) float32 tensor of source points
+        src_normal: (num_src_samples, 3) float32 tensor of source points normals
+        k: float32 tensor of wave number
+        deriv: whether to compute the derivative of the Green function
+    Returns:
+        (num_trg_samples, num_src_samples) float32 tensor
+    """
+
+    result = torch.empty(
+        (trg_points.shape[0], src_points.shape[0]),
+        dtype=torch.float32,
+        device=trg_points.device,
+    )
+    cuda_method_name = "batch_green_func" + str(int(deriv))
+    CUDA_MODULE.get(cuda_method_name)(
+        trg_points,
+        src_points,
+        src_normal,
+        k,
+        result,
+    )
+    return result

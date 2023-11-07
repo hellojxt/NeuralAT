@@ -69,9 +69,10 @@ class BEMModel:
         left_side = -0.5 * M + K
         right_side = V * self.neumann_fun
         dirichlet_fun, info, res = bempp.api.linalg.gmres(
-            left_side, right_side, tol=1e-6, maxiter=1000, return_residuals=True
+            left_side, right_side, tol=1e-6, maxiter=2000, return_residuals=True
         )
         self.dirichlet_fun = dirichlet_fun
+        return res
 
     def potential_solve(self, points):
         """

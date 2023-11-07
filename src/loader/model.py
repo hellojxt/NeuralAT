@@ -3,6 +3,7 @@ import sys
 from .kleinpat import read_mode_data
 import meshio
 import numpy as np
+from .bempp import BEMModel
 
 
 def update_normals(vertices, triangles):
@@ -25,8 +26,10 @@ def update_vertex_normals(vertices, triangles, triangle_normals):
     triangle_normals: (m, 3)
     """
     vertex_normals = np.zeros_like(vertices)
-    for i in range(3):
-        vertex_normals[triangles[:, i]] += triangle_normals
+    for i in range(len(triangles)):
+        vertex_normals[triangles[i, 0]] += triangle_normals[i]
+        vertex_normals[triangles[i, 1]] += triangle_normals[i]
+        vertex_normals[triangles[i, 2]] += triangle_normals[i]
     vertex_normals = vertex_normals / np.linalg.norm(
         vertex_normals, axis=1, keepdims=True
     )
@@ -76,6 +79,42 @@ class ModalSoundObject:
         # triangle_neumann = triangle_neumann / triangle_neumann.max()
         triangle_neumann = (triangle_neumann * self.triangles_normal).sum(axis=1)
         return triangle_neumann
+
+    def get_vertex_dirichlet(self, mode_id, force_recompute=False):
+        dirichlet_real_path = os.path.join(self.dirichlet_dir, f"{mode_id}_real.npy")
+        dirichlet_imag_path = os.path.join(self.dirichlet_dir, f"{mode_id}_imag.npy")
+        dirichlet_error_path = os.path.join(self.dirichlet_dir, f"{mode_id}_error.txt")
+        dirichlet_cost_time_path = os.path.join(
+            self.dirichlet_dir, f"{mode_id}_cost_time.txt"
+        )
+        import time
+
+        if (
+            not os.path.exists(dirichlet_real_path)
+            or not os.path.exists(dirichlet_imag_path)
+            or not os.path.exists(dirichlet_error_path)
+            or not os.path.exists(dirichlet_cost_time_path)
+            or force_recompute
+        ):
+            triangle_neumann = self.get_triangle_neumann(mode_id)
+            bem_model = BEMModel(
+                self.vertices,
+                self.triangles,
+                self.get_wave_number(mode_id),
+            )
+            start = time.time()
+            residual = bem_model.boundary_equation_solve(triangle_neumann)
+            end = time.time()
+            dirichlet = bem_model.get_dirichlet_coeff().reshape(-1, 1)
+            np.save(dirichlet_real_path, dirichlet.real)
+            np.save(dirichlet_imag_path, dirichlet.imag)
+            np.savetxt(dirichlet_error_path, residual)
+            np.savetxt(dirichlet_cost_time_path, [end - start])
+        dirichlet_real_gt = np.load(dirichlet_real_path)
+        dirichlet_imag_gt = np.load(dirichlet_imag_path)
+        dirichlet_error = np.loadtxt(dirichlet_error_path)
+        cost_time = np.loadtxt(dirichlet_cost_time_path)
+        return dirichlet_real_gt, dirichlet_imag_gt, dirichlet_error, cost_time
 
     def get_triangle_center(self):
         triangle_center = self.vertices[self.triangles].mean(axis=1)

@@ -38,7 +38,7 @@ class CUDA_MODULE:
         return CUDA_MODULE._module
 
 
-CUDA_MODULE.load(Debug=True, MemoryCheck=False, Verbose=False)
+CUDA_MODULE.load(Debug=False, MemoryCheck=False, Verbose=False)
 
 
 def check_tensor(tensor, dtype):
@@ -99,6 +99,25 @@ class ImportanceSampler:
             self.points_index,
         )
 
+    def poisson_disk_resample(self, r, k=5):
+        """
+        Sample points on the surface of the mesh.
+        """
+        min_bound = self.vertices.min(dim=0)[0]
+        max_bound = self.vertices.max(dim=0)[0]
+        bound_size = (max_bound - min_bound).max()
+        center = (max_bound + min_bound) / 2
+        min_bound = center - bound_size / 2 * 1.1
+        max_bound = center + bound_size / 2 * 1.1
+        return CUDA_MODULE.get("poisson_disk_resample")(
+            self.points,
+            self.points_normals,
+            min_bound,
+            max_bound,
+            r,
+            k,
+        )
+
 
 class MonteCarloWeight:
     def __init__(self, trg_points, src_sample, k, deriv=False):
@@ -129,32 +148,3 @@ class MonteCarloWeight:
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
-
-
-def batch_green_func(trg_points, src_points, src_normal, k, deriv=False):
-    """
-    Compute the Green function for a batch of target points and a batch of source points.
-    Args:
-        trg_points: (num_trg_samples, 3) float32 tensor of target points
-        src_points: (num_src_samples, 3) float32 tensor of source points
-        src_normal: (num_src_samples, 3) float32 tensor of source points normals
-        k: float32 tensor of wave number
-        deriv: whether to compute the derivative of the Green function
-    Returns:
-        (num_trg_samples, num_src_samples) float32 tensor
-    """
-
-    result = torch.empty(
-        (trg_points.shape[0], src_points.shape[0]),
-        dtype=torch.float32,
-        device=trg_points.device,
-    )
-    cuda_method_name = "batch_green_func" + str(int(deriv))
-    CUDA_MODULE.get(cuda_method_name)(
-        trg_points,
-        src_points,
-        src_normal,
-        k,
-        result,
-    )
-    return result

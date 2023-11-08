@@ -51,8 +51,9 @@ def train():
         # )
 
         LHS = dirichlet_trg
-        RHS = G1 @ dirichlet_src - G0 @ neumann_src
-        loss = ((LHS - RHS).abs()).mean()
+        # RHS = G1 @ dirichlet_src - G0 @ neumann_src
+        # loss = ((LHS - RHS).abs()).mean()
+        loss = ((LHS).abs()).mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()

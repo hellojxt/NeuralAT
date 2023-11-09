@@ -218,11 +218,13 @@ int3 inline HOST_DEVICE global_1d_to_3d(long long global_cell_id, int grid_res)
 
 float inline HOST_DEVICE approx_geo_dist(float3 p1, float3 n1, float3 p2, float3 n2)
 {
-    float de = length(p1 - p2);
+    float de = length(p2 - p1);
     float3 v = (p2 - p1) / de;
     float c1 = dot(n1, v);
     float c2 = dot(n2, v);
-    return de;
+    if (abs(c1 - c2) < 1e-3)
+        return de / sqrt(1 - c1 * c1);
+    return (asin(c1) - asin(c2)) / (c1 - c2) * de;
 }
 
 torch::Tensor poisson_disk_resample(const torch::Tensor points,
@@ -252,8 +254,6 @@ torch::Tensor poisson_disk_resample(const torch::Tensor points,
         cell_points[i].global_cell_id = global_3d_to_1d(make_int3(x, y, z), grid_res);
         cell_points[i].pos = p;
         cell_points[i].origin_point_id = i;
-
-        // debug_tensor[i] = (x % 3) + (y % 3) * 3 + (z % 3) * 3 * 3;
     });
 
     // sort by global cell id

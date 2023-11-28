@@ -71,6 +71,7 @@ using randomState = curandState_t;
 
 #define HOST_DEVICE __host__ __device__
 constexpr uint32_t n_threads_linear = 128;
+constexpr uint32_t n_threads_linear_3D = 8;
 
 template <typename T>
 HOST_DEVICE T div_round_up(T val, T divisor)
@@ -82,6 +83,12 @@ template <typename T>
 constexpr uint32_t n_blocks_linear(T n_elements)
 {
     return (uint32_t)div_round_up(n_elements, (T)n_threads_linear);
+}
+
+template <typename T>
+constexpr uint32_t n_blocks_linear_3D(T n_elements)
+{
+    return (uint32_t)div_round_up(n_elements, (T)n_threads_linear_3D);
 }
 
 template <typename K, typename T, typename... Types>
@@ -181,6 +188,45 @@ template <typename F>
 inline void parallel_for_soa(size_t n_elements, uint32_t n_dims, F &&fun)
 {
     parallel_for_soa(0, n_elements, n_dims, std::forward<F>(fun));
+}
+
+template <typename F>
+__global__ void parallel_for_3D_kernel(const size_t n_elements_x,
+                                       const size_t n_elements_y,
+                                       const size_t n_elements_z,
+                                       F fun)
+{
+    const size_t x = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t y = threadIdx.y + blockIdx.y * blockDim.y;
+    const size_t z = threadIdx.z + blockIdx.z * blockDim.z;
+    if (x >= n_elements_x)
+        return;
+    if (y >= n_elements_y)
+        return;
+    if (z >= n_elements_z)
+        return;
+    fun(x, y, z);
+}
+
+template <typename F>
+inline void parallel_for_3D(uint32_t shmem_size, size_t n_elements_x, size_t n_elements_y, size_t n_elements_z, F &&fun)
+{
+    if (n_elements_x <= 0 || n_elements_y <= 0 || n_elements_z <= 0)
+    {
+        return;
+    }
+    const dim3 threads = {n_threads_linear_3D, n_threads_linear_3D, n_threads_linear_3D};
+    const dim3 blocks = {n_blocks_linear_3D(n_elements_x), n_blocks_linear_3D(n_elements_y),
+                         n_blocks_linear_3D(n_elements_z)};
+    // printf("blocks: %d %d %d\n", blocks.x, blocks.y, blocks.z);
+    // printf("threads: %d %d %d\n", threads.x, threads.y, threads.z);
+    parallel_for_3D_kernel<<<blocks, threads, shmem_size>>>(n_elements_x, n_elements_y, n_elements_z, fun);
+}
+
+template <typename F>
+inline void parallel_for_3D(size_t n_elements_x, size_t n_elements_y, size_t n_elements_z, F &&fun)
+{
+    parallel_for_3D(0, n_elements_x, n_elements_y, n_elements_z, std::forward<F>(fun));
 }
 
 inline std::vector<unsigned long long> get_random_seeds(int n)

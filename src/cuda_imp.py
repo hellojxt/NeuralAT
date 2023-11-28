@@ -2,6 +2,7 @@ from torch.utils.cpp_extension import load as load_cuda
 import os
 from glob import glob
 import torch
+import numpy as np
 
 
 class CUDA_MODULE:
@@ -47,6 +48,18 @@ def check_tensor(tensor, dtype):
     assert tensor.is_contiguous()
 
 
+def get_bound_info(vertices, padding=0.1):
+    if isinstance(vertices, np.ndarray):
+        vertices = torch.from_numpy(vertices)
+    min_bound = vertices.min(dim=0)[0]
+    max_bound = vertices.max(dim=0)[0]
+    bound_size = (max_bound - min_bound).max() * (1 + padding)
+    center = (max_bound + min_bound) / 2
+    min_bound = center - bound_size / 2
+    max_bound = center + bound_size / 2
+    return min_bound, max_bound, bound_size
+
+
 class ImportanceSampler:
     def __init__(
         self, vertices, triangles, importance, num_samples, neumann_coeff=None
@@ -79,6 +92,7 @@ class ImportanceSampler:
         self.points_index = torch.empty(
             (num_samples), dtype=torch.int32, device=self.vertices.device
         )
+        self.min_bound, self.max_bound, self.bound_size = get_bound_info(vertices)
 
     def update(self):
         """
@@ -103,20 +117,36 @@ class ImportanceSampler:
         """
         Sample points on the surface of the mesh.
         """
-        min_bound = self.vertices.min(dim=0)[0]
-        max_bound = self.vertices.max(dim=0)[0]
-        bound_size = (max_bound - min_bound).max()
-        center = (max_bound + min_bound) / 2
-        min_bound = center - bound_size / 2 * 1.1
-        max_bound = center + bound_size / 2 * 1.1
-        return CUDA_MODULE.get("poisson_disk_resample")(
+        mask = CUDA_MODULE.get("poisson_disk_resample")(
             self.points,
             self.points_normals,
-            min_bound,
-            max_bound,
+            self.min_bound,
+            self.max_bound,
             r,
             k,
-        )
+        ).bool()
+        N = mask.sum()
+        self.points = self.points[mask]
+        self.points_normals = self.points_normals[mask]
+        self.points_importance = self.points_importance[mask]
+        self.points_neumann = self.points_neumann[mask]
+        self.points_index = self.points_index[mask]
+        self.num_samples = N
+
+    def get_inputs(self):
+        return self.warp_inputs(self.points, self.points_normals)
+
+    def warp_inputs(self, points, normals):
+        return torch.cat(
+            [
+                (points - self.min_bound) / self.bound_size,
+                normals,
+            ],
+            dim=1,
+        ).float()
+
+    def get_points_neumann(self):
+        return self.points_neumann.to(torch.complex64).squeeze(-1)
 
 
 class MonteCarloWeight:
@@ -148,3 +178,72 @@ class MonteCarloWeight:
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
+
+    def get_weights_boundary(self):
+        """
+        Compute the Green function for a batch of target points and a batch of source points.
+        """
+        cuda_method_name = "get_monte_carlo_weight_boundary" + str(int(self.deriv))
+        CUDA_MODULE.get(cuda_method_name)(
+            self.trg_points,
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            self.k,
+            self.src_sample.cdf[-1],
+            self.weights_,
+        )
+        return torch.view_as_complex(self.weights_)
+
+
+class FDTDSimulator:
+    def __init__(self, min_bound, max_bound, bound_size, res):
+        self.min_bound = min_bound
+        self.max_bound = max_bound
+        self.bound_size = bound_size
+        self.grid_size = bound_size / res
+        self.res = res
+        self.dt = self.grid_size / 3**0.5 / 343.0 / 1.01
+        self.grids, self.pml_grids, self.cells, self.accumulate_grids = CUDA_MODULE.get(
+            "allocate_grids_data"
+        )(res)
+        self.time_idx = 0
+
+    def get_mgrid_xyz(self):
+        x = torch.linspace(
+            self.min_bound[0] + self.grid_size / 2,
+            self.max_bound[0] - self.grid_size / 2,
+            self.res,
+            device="cuda",
+        )
+        y = torch.linspace(
+            self.min_bound[1] + self.grid_size / 2,
+            self.max_bound[1] - self.grid_size / 2,
+            self.res,
+            device="cuda",
+        )
+        z = torch.linspace(
+            self.min_bound[2] + self.grid_size / 2,
+            self.max_bound[2] - self.grid_size / 2,
+            self.res,
+            device="cuda",
+        )
+        return torch.meshgrid(x, y, z, indexing="ij")
+
+    def update(self, vertices, triangles, triangles_neumann, need_rasterize=True):
+        CUDA_MODULE.get("FDTD_simulation")(
+            vertices,
+            triangles,
+            triangles_neumann,
+            self.min_bound,
+            self.max_bound,
+            self.grids,
+            self.pml_grids,
+            self.cells,
+            self.accumulate_grids,
+            self.dt,
+            self.res,
+            self.time_idx,
+            need_rasterize,
+        )
+        self.time_idx += triangles_neumann.shape[1]

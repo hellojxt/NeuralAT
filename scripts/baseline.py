@@ -6,7 +6,7 @@ import torch
 from src.cuda_imp import ImportanceSampler, MonteCarloWeight
 from src.loader.model import ModalSoundObject
 import numpy as np
-from src.net import get_mlps
+from src.net import get_mlps, ComplexMLPS
 from src.visualize import plot_mesh
 import os
 import time
@@ -16,10 +16,10 @@ os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 
 def train():
-    model = get_mlps(2, True)
+    model = ComplexMLPS(True).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=4e-3)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 500, 0.9)
-    importance = torch.abs(triangle_neumann)
+    importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
     sampler_src = ImportanceSampler(
         vertices, triangles, importance, M, triangle_neumann
     )
@@ -33,25 +33,12 @@ def train():
             sampler_trg.update()
             G0 = G0_constructor.get_weights()
             G1 = G1_constructor.get_weights()
-        neumann_src = sampler_src.points_neumann.to(torch.complex64).squeeze(-1)
-        src_inputs = torch.cat(
-            [sampler_src.points * 5, sampler_src.points_normals], dim=1
-        ).float()
-        trg_inputs = torch.cat(
-            [sampler_trg.points * 5, sampler_trg.points_normals], dim=1
-        ).float()
-        dirichlet_src = torch.view_as_complex(model(src_inputs).float())
-        dirichlet_trg = torch.view_as_complex(model(trg_inputs).float())
-        # print(
-        #     G0.shape,
-        #     G1.shape,
-        #     dirichlet_src.shape,
-        #     dirichlet_trg.shape,
-        #     neumann_src.shape,
-        # )
+            B = G0 @ sampler_src.get_points_neumann()
 
+        dirichlet_src = model(sampler_src.get_inputs())
+        dirichlet_trg = model(sampler_trg.get_inputs())
         LHS = dirichlet_trg
-        RHS = G1 @ dirichlet_src - G0 @ neumann_src
+        RHS = G1 @ dirichlet_src - B
         loss = ((LHS - RHS).abs()).mean()
         optimizer.zero_grad()
         loss.backward()
@@ -60,18 +47,13 @@ def train():
         print("Epoch: {}, Loss: {}".format(epoch, loss.item()))
 
     end_time = time.time()
-    vertices_input = torch.cat([vertices * 5, vertices_normals], dim=1).float()
-    LHS = torch.view_as_complex(model(vertices_input))
-    sampler_src.update()
     G0_constructor = MonteCarloWeight(vertices, sampler_src, k)
     G1_constructor = MonteCarloWeight(vertices, sampler_src, k, deriv=True)
     G0 = G0_constructor.get_weights()
     G1 = G1_constructor.get_weights()
-    neumann_src = sampler_src.points_neumann.to(torch.complex64).squeeze(-1)
-    src_inputs = torch.cat(
-        [sampler_src.points * 5, sampler_src.points_normals], dim=1
-    ).float()
-    dirichlet_src = torch.view_as_complex(model(src_inputs).float())
+    dirichlet_src = model(sampler_src.get_inputs())
+    neumann_src = sampler_src.get_points_neumann()
+    LHS = model(sampler_src.warp_inputs(vertices, vertices_normals))
     RHS = G1 @ dirichlet_src - G0 @ neumann_src
     data = (
         torch.stack(
@@ -113,7 +95,7 @@ def train():
 
 N = 10240
 M = 10240
-max_epochs = 10000
+max_epochs = 5000
 
 RHS_rerr_lst = []
 LHS_rerr_lst = []

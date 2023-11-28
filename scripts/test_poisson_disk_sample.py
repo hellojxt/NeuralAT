@@ -15,24 +15,26 @@ sound_object = ModalSoundObject(f"dataset/00003")
 vertices = torch.tensor(sound_object.vertices, dtype=torch.float32).cuda()
 triangles = torch.tensor(sound_object.triangles, dtype=torch.int32).cuda()
 importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
+
+# warm up
 sampler = ImportanceSampler(vertices, triangles, importance, 500000)
-
 sampler.update()
-points = sampler.points
-mask = sampler.poisson_disk_resample(0.003, 1).bool()
+sampler.poisson_disk_resample(0.003, 4)
 
-print(mask)
-print(mask.sum())
-print(mask.max())
-print(points.shape, mask.shape)
-print(points[mask].shape)
-plot_point_cloud(
-    sound_object.vertices, sound_object.triangles, points[mask].cpu().numpy()
-).show()
-
-sampler = ImportanceSampler(vertices, triangles, importance, 21350)
+# start test
+start_time = time.time()
+sampler = ImportanceSampler(vertices, triangles, importance, 500000)
 sampler.update()
+sampler.poisson_disk_resample(0.002, 4)
+print("sample points: ", sampler.num_samples)
+print("possion disk sampling cost time: ", time.time() - start_time)
+
+# compare
+plot_point_cloud(sound_object.vertices, sound_object.triangles, sampler.points).show()
+
+start_time = time.time()
+sampler = ImportanceSampler(vertices, triangles, importance, sampler.num_samples)
+sampler.update()
+print("random sampling cost time: ", time.time() - start_time)
 points = sampler.points
-plot_point_cloud(
-    sound_object.vertices, sound_object.triangles, points.cpu().numpy()
-).show()
+plot_point_cloud(sound_object.vertices, sound_object.triangles, points).show()

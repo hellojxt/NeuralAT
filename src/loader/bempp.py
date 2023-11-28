@@ -3,11 +3,12 @@ from bempp.api.operators import potential, boundary
 from bempp.api import GridFunction, export, function_space
 import numpy as np
 import warnings
+import torch
 
 # warnings.filterwarnings("ignore")
 bempp.api.enable_console_logging("debug")
-# bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
-# bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
+bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
+bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
 
 
 def obj_to_grid(vertices, elements):
@@ -80,6 +81,8 @@ class BEMModel:
         """
         shape = points.shape
         points = points.reshape(-1, 3)
+        if isinstance(points, torch.Tensor):
+            points = points.detach().cpu().numpy()
         potential_single = potential.helmholtz.single_layer(
             self.dp0_space,
             points.T,
@@ -89,7 +92,7 @@ class BEMModel:
             device_interface="opencl",
         )
         potential_double = potential.helmholtz.double_layer(
-            self.dp0_space,
+            self.p1_space,
             points.T,
             self.k,
             assembler="fmm" if self.fmm else "dense",

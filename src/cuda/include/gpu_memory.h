@@ -12,32 +12,6 @@
 #include <vector>
 
 NWOB_NAMESPACE_BEGIN
-template <typename T>
-struct PitchedPtr
-{
-        HOST_DEVICE PitchedPtr() : ptr{nullptr}, stride_in_bytes{sizeof(T)} {}
-        HOST_DEVICE PitchedPtr(T *ptr, size_t stride_in_elements, size_t offset = 0, size_t extra_stride_bytes = 0)
-            : ptr{ptr + offset}, stride_in_bytes{(uint32_t)(stride_in_elements * sizeof(T) + extra_stride_bytes)}
-        {}
-
-        template <typename U>
-        HOST_DEVICE explicit PitchedPtr(PitchedPtr<U> other)
-            : ptr{(T *)other.ptr}, stride_in_bytes{other.stride_in_bytes}
-        {}
-
-        HOST_DEVICE T *operator[](uint32_t y) const { return (T *)((const char *)ptr + y * stride_in_bytes); }
-
-        HOST_DEVICE void operator+=(uint32_t y) { ptr = (T *)((const char *)ptr + y * stride_in_bytes); }
-
-        HOST_DEVICE void operator-=(uint32_t y) { ptr = (T *)((const char *)ptr - y * stride_in_bytes); }
-
-        HOST_DEVICE explicit operator bool() const { return ptr; }
-
-        HOST_DEVICE uint32_t stride() const { return stride_in_bytes / sizeof(T); }
-
-        T *ptr;
-        uint32_t stride_in_bytes;
-};
 
 #define DEBUG_GUARD_SIZE 32
 
@@ -371,43 +345,61 @@ class GPUMemory
         T *device_ptr() const { return data(); }
 };
 
-template <class T>
-class GPUMatrix
+template <typename T, size_t N>
+struct PitchedPtr
 {
-    private:
-        size_t m_width = 0;
-        size_t m_height = 0;
+        HOST_DEVICE PitchedPtr() : ptr(nullptr) {}
 
-    public:
-        GPUMemory<T> memory;
-        GPUMatrix() {}
-        GPUMatrix(size_t width, size_t height) { resize(width, height); }
-        // Don't permit copy assignment to prevent performance accidents.
-        // Copy is permitted through an explicit copy constructor.
-        GPUMatrix<T> &operator=(const GPUMatrix<T> &other) = delete;
-        explicit GPUMatrix(const GPUMatrix<T> &other)
+        template <typename... Sizes>
+        HOST_DEVICE PitchedPtr(T *ptr, Sizes... sizes) : ptr(ptr)
         {
-            memory.copy_from_device(other.memory);
-            m_width = other.m_width;
-            m_height = other.m_height;
+            set(ptr, sizes...);
         }
-        size_t width() const { return m_width; }
-        size_t height() const { return m_height; }
-        void resize(size_t width, size_t height)
+
+        template <typename... Sizes>
+        HOST_DEVICE void set(T *ptr, Sizes... sizes)
         {
-            memory.resize(width * height);
-            m_width = width;
-            m_height = height;
+            static_assert(sizeof...(Sizes) == N, "Wrong number of sizes");
+            size_t sizes_array[N] = {static_cast<size_t>(sizes)...};
+            size[N - 1] = sizes_array[N - 1];
+            stride[N - 1] = 1;
+            for (int i = N - 2; i >= 0; --i)
+            {
+                size[i] = sizes_array[i];
+                stride[i] = stride[i + 1] * size[i + 1];
+            }
+            this->ptr = ptr;
         }
-        void free_memory()
+
+        template <typename... Indices>
+        HOST_DEVICE T &operator()(Indices... indices) const
         {
-            memory.free_memory();
-            m_width = 0;
-            m_height = 0;
+            static_assert(sizeof...(Indices) == N, "Wrong number of indices");
+            return ptr[get_index(indices...)];
         }
-        T *data() const { return memory.data(); }
-        size_t size() const { return memory.size(); }
-        PitchedPtr<T> device_ptr() const { return {memory.data(), m_width}; }
+
+        HOST_DEVICE T &operator()(int3 coord) const
+        {
+            static_assert(N == 3, "int3 operator can only be used with N=3");
+            return ptr[get_index(coord.x, coord.y, coord.z)];
+        }
+
+        template <typename... Indices>
+        HOST_DEVICE size_t get_index(Indices... indices) const
+        {
+            size_t indices_array[N] = {static_cast<size_t>(indices)...};
+            size_t index = 0;
+#pragma unroll
+            for (int i = 0; i < N; ++i)
+            {
+                index += indices_array[i] * stride[i];
+            }
+            return index;
+        }
+
+        T *ptr;
+        size_t stride[N];
+        size_t size[N];
 };
 
 NWOB_NAMESPACE_END

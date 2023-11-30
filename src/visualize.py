@@ -138,11 +138,11 @@ def plot_point_cloud(
         i=triangles[:, 0],
         j=triangles[:, 1],
         k=triangles[:, 2],
-        intensity=np.zeros(len(vertices)),
+        intensity=-np.zeros(len(vertices)),
         colorscale="Viridis",
         opacity=mesh_opacity,
-        cmin=cmin,
-        cmax=cmax,
+        cmin=-1,
+        cmax=1,
         # lighting=dict(ambient=1.0, diffuse=1.0, specular=1.0, fresnel=0.0),  # 关闭光照效果
     )
     fig = go.Figure(data=[mesh, scatter])

@@ -363,6 +363,7 @@ struct PitchedPtr
             size_t sizes_array[N] = {static_cast<size_t>(sizes)...};
             size[N - 1] = sizes_array[N - 1];
             stride[N - 1] = 1;
+#pragma unroll
             for (int i = N - 2; i >= 0; --i)
             {
                 size[i] = sizes_array[i];

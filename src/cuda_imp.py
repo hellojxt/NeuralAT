@@ -162,6 +162,10 @@ class MonteCarloWeight:
         )
         self.k = k
         self.deriv = deriv
+    
+    def init_random_states(self, resample_num):
+        N = self.src_sample.num_samples
+        self.random_state = CUDA_MODULE.get("get_random_states")(N * resample_num)
 
     def get_weights(self):
         """
@@ -194,6 +198,28 @@ class MonteCarloWeight:
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
+
+    def get_weights_sparse(self, resample_num):
+        """
+        Compute the Green function for a batch of target points and a batch of source points.
+        """
+        cuda_method_name = "get_monte_carlo_weight_sparse" + str(int(self.deriv))
+        row_indices, col_indices, values = CUDA_MODULE.get(cuda_method_name)(
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            self.random_state,
+            self.k,
+            self.src_sample.cdf[-1],
+            resample_num,
+        )
+        N = len(self.src_sample.points)
+        values = torch.view_as_complex(values)
+        return torch.sparse_csr_tensor(
+            row_indices, col_indices,
+            values,
+            (N, N),
+        )
 
 
 class FDTDSimulator:

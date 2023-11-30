@@ -19,7 +19,7 @@ class BiCGSTAB:
 
     """
 
-    def __init__(self, A, device="cuda"):
+    def __init__(self, Ax_gen, device="cuda"):
         """
         Ax_gen: A function that takes a 1-D tensor x and output Ax
 
@@ -27,7 +27,7 @@ class BiCGSTAB:
         efficient to compute A explicitly.
 
         """
-        self.Ax_gen = lambda x: torch.matmul(A, x)
+        self.Ax_gen = Ax_gen
         self.device = device
 
     def init_params(self, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
@@ -39,7 +39,7 @@ class BiCGSTAB:
 
         """
         self.b = b.clone().detach()
-        self.x = torch.zeros(b.shape[0], device=self.device) if x is None else x
+        self.x = torch.zeros_like(b) if x is None else x
         self.residual_tol = tol * torch.vdot(self.b, self.b).real
         self.atol = torch.tensor(atol, device=self.device)
         self.nsteps = b.shape[0] if nsteps is None else nsteps
@@ -98,6 +98,7 @@ class BiCGSTAB:
         iter_count = 0
         while self.nsteps:
             s = self.step()
+            # print(self.x)
             iter_count += 1
             if s:
                 print(f"Converged in {iter_count} steps")

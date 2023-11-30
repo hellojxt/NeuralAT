@@ -184,7 +184,7 @@ void get_monte_carlo_weight_boundary(const torch::Tensor trg_points,
             result.y = weight.imag();
             if (trg_i == src_i)
             {
-                result = result * 2 * (2 * M_PI * EPS) - make_float2(1, 0);
+                result *= 2 * (2 * M_PI * EPS);
             }
             else
             {
@@ -192,6 +192,89 @@ void get_monte_carlo_weight_boundary(const torch::Tensor trg_points,
             }
             out[i] = result;
         });
+}
+
+class Reservoir
+{
+    public:
+        int y_idx;
+        float w_sum;
+        int M;
+        HOST_DEVICE inline Reservoir()
+        {
+            y_idx = -1;
+            w_sum = 0;
+            M = 0;
+        }
+
+        HOST_DEVICE inline void update(int x_idx, float w_i, float rnd)
+        {
+            w_sum += w_i;
+            M++;
+            if (rnd <= w_i / w_sum)
+            {
+                y_idx = x_idx;
+            }
+        }
+};
+
+template <bool deriv>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> get_monte_carlo_weight_sparse(const torch::Tensor points_,
+                                                                                      const torch::Tensor normals_,
+                                                                                      const torch::Tensor importance_,
+                                                                                      const torch::Tensor states_,
+                                                                                      float k,
+                                                                                      const float cdf_sum,
+                                                                                      int resample_num)
+{
+    int N = points_.size(0);
+    auto row_indices_ = torch::empty({N + 1}, torch::dtype(torch::kInt32).device(torch::kCUDA));
+    auto col_indices_ = torch::empty({N * resample_num}, torch::dtype(torch::kInt32).device(torch::kCUDA));
+    auto values_ = torch::empty({N * resample_num, 2}, torch::dtype(torch::kFloat32).device(torch::kCUDA));
+    auto row_indices = (int *)row_indices_.data_ptr();
+    auto col_indices = PitchedPtr<int, 2>((int *)col_indices_.data_ptr(), N, resample_num);
+    auto values = PitchedPtr<float2, 2>((float2 *)values_.data_ptr(), N, resample_num);
+    auto points = (float3 *)points_.data_ptr();
+    auto normals = (float3 *)normals_.data_ptr();
+    auto importance = (float *)importance_.data_ptr();
+    int stride = ceil(N / resample_num);
+    auto states = PitchedPtr<randomState, 2>((randomState *)states_.data_ptr(), N, resample_num);
+    parallel_for(N * resample_num, [=] __device__(int i) {
+        int row_i = i / resample_num, col_i = i % resample_num;
+        int trg_i = row_i, start_idx = col_i * stride;
+        int end_idx = min(start_idx + stride, N);
+        if (col_i > N - (stride - 1) * resample_num)
+        {
+            start_idx += col_i - (N - (stride - 1) * resample_num);
+            end_idx = min(start_idx + stride - 1, N);
+        }
+        float3 trg = points[trg_i];
+        Reservoir reservoir;
+        auto state = states(trg_i, col_i);
+        float p = 1.0f / (end_idx - start_idx);
+        for (int src_i = start_idx; src_i < end_idx; src_i++)
+        {
+            float p_hat = 1 / (length(trg - points[src_i]) + EPS);
+            reservoir.update(src_i, p_hat / p, curand_uniform(&state));
+        }
+        auto src_i = reservoir.y_idx;
+        auto green_func_value = Green_func<deriv>(trg, points[src_i], normals[src_i], k);
+        float2 W = make_float2(green_func_value.real(), green_func_value.imag());
+        W *= (length(trg - points[src_i]) + EPS) * (1.0f / reservoir.M * reservoir.w_sum);
+        if (trg_i == src_i)
+        {
+            W *= 2 * (2 * M_PI * EPS);
+        }
+        else
+        {
+            W *= 2 * (cdf_sum - M_PI * EPS * EPS * importance[src_i]) / importance[src_i] / (N - 1);
+        }
+        values(trg_i, col_i) = W;
+        col_indices(trg_i, col_i) = reservoir.y_idx;
+        if (i < N + 1)
+            row_indices[i] = i * resample_num;
+    });
+    return std::make_tuple(row_indices_, col_indices_, values_);
 }
 
 class CellPoint
@@ -337,17 +420,18 @@ torch::Tensor poisson_disk_resample(const torch::Tensor points,
 
     // print cell info
     // parallel_for(1,
-    //              [valid_cell_num, cells = cells.device_ptr(), points = (float3 *)points.data_ptr()] __device__(int i)
+    //              [valid_cell_num, cells = cells.device_ptr(), points = (float3 *)points.data_ptr()]
+    //              __device__(int i)
     //              {
     //                  for (int j = 0; j < valid_cell_num; j++)
     //                  {
     //                      printf(
     //                          "cell %d: global_cell_id: %ld, global_cell_id_3d: %d %d %d, phase_group_id: %d, "
     //                          "first_point_id: %d, first point: %f %f %f\n",
-    //                          j, cells[j].global_cell_id, cells[j].global_cell_id_3d.x, cells[j].global_cell_id_3d.y,
-    //                          cells[j].global_cell_id_3d.z, cells[j].phase_group_id, cells[j].first_point_id,
-    //                          points[cells[j].first_point_id].x, points[cells[j].first_point_id].y,
-    //                          points[cells[j].first_point_id].z);
+    //                          j, cells[j].global_cell_id, cells[j].global_cell_id_3d.x,
+    //                          cells[j].global_cell_id_3d.y, cells[j].global_cell_id_3d.z, cells[j].phase_group_id,
+    //                          cells[j].first_point_id, points[cells[j].first_point_id].x,
+    //                          points[cells[j].first_point_id].y, points[cells[j].first_point_id].z);
     //                  }
     //              });
 
@@ -408,7 +492,8 @@ torch::Tensor poisson_disk_resample(const torch::Tensor points,
                                 int neighbor_global_cell_id = global_3d_to_1d(neighbor_global_cell_id_3d, grid_res);
                                 int neighbor_cell_id =
                                     query_hash_table(hash_table, hash_table_size, neighbor_global_cell_id);
-                                // printf("%d:neighbor_global_cell_id: 1d: %d, 3d: %d %d %d, neighbor_cell_id: %d\n",
+                                // printf("%d:neighbor_global_cell_id: 1d: %d, 3d: %d %d %d, neighbor_cell_id:
+                                // %d\n",
                                 //        phase_group_id, neighbor_global_cell_id, neighbor_global_cell_id_3d.x,
                                 //        neighbor_global_cell_id_3d.y, neighbor_global_cell_id_3d.z,
                                 //        neighbor_cell_id);
@@ -444,8 +529,8 @@ torch::Tensor poisson_disk_resample(const torch::Tensor points,
                         cell.sample_origin_point_id = p.origin_point_id;
                         // printf("%d: sampled of cell %ld (%d, %d, %d): %f %f %f\n", phase_group_id,
                         // cell.global_cell_id,
-                        //        cell.global_cell_id_3d.x, cell.global_cell_id_3d.y, cell.global_cell_id_3d.z, p.pos.x,
-                        //        p.pos.y, p.pos.z);
+                        //        cell.global_cell_id_3d.x, cell.global_cell_id_3d.y, cell.global_cell_id_3d.z,
+                        //        p.pos.x, p.pos.y, p.pos.z);
                     }
                 }
             });
@@ -557,6 +642,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("get_monte_carlo_weight0", &get_monte_carlo_weight<false>, "");
     m.def("get_monte_carlo_weight_boundary1", &get_monte_carlo_weight_boundary<true>, "");
     m.def("get_monte_carlo_weight_boundary0", &get_monte_carlo_weight_boundary<false>, "");
+    m.def("get_monte_carlo_weight_sparse1", &get_monte_carlo_weight_sparse<true>, "");
+    m.def("get_monte_carlo_weight_sparse0", &get_monte_carlo_weight_sparse<false>, "");
     m.def("poisson_disk_resample", &poisson_disk_resample, "");
     m.def("allocate_grids_data", &allocate_grids_data, "");
     m.def("FDTD_simulation", &FDTD_simulation, "");

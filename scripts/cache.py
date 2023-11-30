@@ -57,24 +57,32 @@ def run(warm_up=False):
         print("sample points: ", sampler.num_samples)
         print("possion disk sampling cost time: ", timer.get_time())
 
+    resample_num = 256
     G0_constructor = MonteCarloWeight(sampler.points, sampler, k)
     G1_constructor = MonteCarloWeight(sampler.points, sampler, k, deriv=True)
-    G0 = G0_constructor.get_weights_boundary()
-    G1 = G1_constructor.get_weights_boundary()
+    G0_constructor.init_random_states(resample_num)
+    G1_constructor.init_random_states(resample_num)
+    if not warm_up:
+        print("init random states cost time: ", timer.get_time())
+
+    G0 = G0_constructor.get_weights_sparse(resample_num)
+    G1 = G1_constructor.get_weights_sparse(resample_num)
+    # G0 = G0_constructor.get_weights_boundary()
+    # G1 = G1_constructor.get_weights_boundary()
     if not warm_up:
         print("construct G cost time: ", timer.get_time())
 
-    solver = BiCGSTAB(G1)
+    A = lambda x: (torch.matmul(G1, x) - x)
+    solver = BiCGSTAB(A)
     if not warm_up:
         print("construct A cost time: ", timer.get_time())
 
     neumann_src = sampler.points_neumann.to(torch.complex64).squeeze(-1)
-    b = G0 @ neumann_src + neumann_src
-    x = torch.zeros_like(b)
+    b = G0 @ neumann_src
     if not warm_up:
         print("construct b cost time: ", timer.get_time())
 
-    dirichlet_src = solver.solve(b, x, tol=0.001, nsteps=100)
+    dirichlet_src = solver.solve(b, tol=0.001, nsteps=100)
     if not warm_up:
         print("solve cost time: ", timer.get_time())
         plot_point_cloud(

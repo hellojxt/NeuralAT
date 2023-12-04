@@ -7,8 +7,8 @@ import torch
 
 # warnings.filterwarnings("ignore")
 bempp.api.enable_console_logging("debug")
-bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
-bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
+# bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
+# bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
 
 
 def obj_to_grid(vertices, elements):

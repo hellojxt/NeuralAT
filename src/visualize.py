@@ -5,6 +5,60 @@ from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 import torch
 
+from PIL import Image
+
+
+def combine_images(image_paths, output_path):
+    """
+    Combines multiple images into a single image.
+
+    :param image_paths: A 2D list of image paths, where each row contains paths for a row of images.
+    :param output_path: Path to save the combined image.
+    """
+    # Determine the number of rows and columns
+    num_rows = len(image_paths)
+    num_cols = len(image_paths[0])
+
+    # Open the first image to get the dimensions
+    with Image.open(image_paths[0][0]) as img:
+        width, height = img.size
+
+    # Create a new image with the combined dimensions
+    combined_img = Image.new("RGB", (num_cols * width, num_rows * height))
+
+    # Place each image in the correct position
+    for row in range(num_rows):
+        for col in range(num_cols):
+            with Image.open(image_paths[row][col]) as img:
+                combined_img.paste(img, (col * width, row * height))
+
+    # Save the combined image
+    combined_img.save(output_path)
+    print(f"Combined image saved to {output_path}")
+
+
+def crop_center(image_path, crop_width, crop_height):
+    """
+    Crops the image at the center with the given width and height.
+
+    :param image_path: Path to the input image.
+    :param crop_width: Width of the crop area.
+    :param crop_height: Height of the crop area.
+    """
+    with Image.open(image_path) as img:
+        width, height = img.size
+        # Calculate the top, left, right, and bottom coordinates for the crop
+        left = (width - crop_width) / 2
+        top = (height - crop_height) / 2
+        right = (width + crop_width) / 2
+        bottom = (height + crop_height) / 2
+
+        # Perform the crop
+        cropped_img = img.crop((left, top, right, bottom))
+
+        # Save the cropped image
+        cropped_img.save(image_path)
+
 
 def plot_mesh(
     vertices, triangles, data=None, names=None, cmin=None, cmax=None, back_ground=False
@@ -100,6 +154,7 @@ def plot_point_cloud(
     mesh_opacity=0.2,
     cmin=None,
     cmax=None,
+    zoom=1.0,
 ):
     """
     coords: (N, 3)
@@ -157,7 +212,9 @@ def plot_point_cloud(
         }
     )
     fig.update_layout(
-        scene_camera=dict(eye=dict(x=0, y=0.5, z=1.5), up=dict(x=0, y=1, z=0))
+        scene_camera=dict(
+            eye=dict(x=0, y=0.5 * zoom, z=1.5 * zoom), up=dict(x=0, y=1, z=0)
+        )
     )
     return fig
 

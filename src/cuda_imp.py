@@ -133,20 +133,8 @@ class ImportanceSampler:
         self.points_index = self.points_index[mask]
         self.num_samples = N
 
-    def get_inputs(self):
-        return self.warp_inputs(self.points, self.points_normals)
-
-    def warp_inputs(self, points, normals):
-        return torch.cat(
-            [
-                (points - self.min_bound) / self.bound_size,
-                normals,
-            ],
-            dim=1,
-        ).float()
-
-    def get_points_neumann(self):
-        return self.points_neumann.to(torch.complex64).squeeze(-1)
+    def get_points_neumann(self, triangles_neumann):
+        return triangles_neumann[self.points_index].to(torch.complex64).reshape(-1, 1)
 
 
 class MonteCarloWeight:
@@ -162,61 +150,53 @@ class MonteCarloWeight:
         )
         self.k = k
         self.deriv = deriv
-    
+
     def init_random_states(self, resample_num):
         N = self.src_sample.num_samples
         self.random_state = CUDA_MODULE.get("get_random_states")(N * resample_num)
 
-    def get_weights(self):
-        """
-        Compute the Green function for a batch of target points and a batch of source points.
-        """
+    def get_weights(self, k=None):
         cuda_method_name = "get_monte_carlo_weight" + str(int(self.deriv))
         CUDA_MODULE.get(cuda_method_name)(
             self.trg_points,
             self.src_sample.points,
             self.src_sample.points_normals,
             self.src_sample.points_importance,
-            self.k,
+            self.k if k is None else k,
             self.src_sample.cdf[-1],
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
 
-    def get_weights_boundary(self):
-        """
-        Compute the Green function for a batch of target points and a batch of source points.
-        """
+    def get_weights_boundary(self, k=None):
         cuda_method_name = "get_monte_carlo_weight_boundary" + str(int(self.deriv))
         CUDA_MODULE.get(cuda_method_name)(
             self.trg_points,
             self.src_sample.points,
             self.src_sample.points_normals,
             self.src_sample.points_importance,
-            self.k,
+            self.k if k is None else k,
             self.src_sample.cdf[-1],
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
 
-    def get_weights_sparse(self, resample_num):
-        """
-        Compute the Green function for a batch of target points and a batch of source points.
-        """
+    def get_weights_sparse(self, resample_num, k=None):
         cuda_method_name = "get_monte_carlo_weight_sparse" + str(int(self.deriv))
         row_indices, col_indices, values = CUDA_MODULE.get(cuda_method_name)(
             self.src_sample.points,
             self.src_sample.points_normals,
             self.src_sample.points_importance,
             self.random_state,
-            self.k,
+            self.k if k is None else k,
             self.src_sample.cdf[-1],
             resample_num,
         )
         N = len(self.src_sample.points)
         values = torch.view_as_complex(values)
         return torch.sparse_csr_tensor(
-            row_indices, col_indices,
+            row_indices,
+            col_indices,
             values,
             (N, N),
         )

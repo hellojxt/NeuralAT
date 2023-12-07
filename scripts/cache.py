@@ -6,7 +6,6 @@ import torch
 from src.cuda_imp import ImportanceSampler, MonteCarloWeight
 from src.loader.model import ModalSoundObject
 import numpy as np
-from src.net import get_mlps
 from src.visualize import plot_mesh, plot_point_cloud
 from src.solver import BiCGSTAB
 import os
@@ -52,7 +51,7 @@ def run(warm_up=False):
         vertices, triangles, importance, 100000, triangle_neumann
     )
     sampler.update()
-    sampler.poisson_disk_resample(0.004, 4)
+    sampler.poisson_disk_resample(0.005, 4)
     if not warm_up:
         print("sample points: ", sampler.num_samples)
         print("possion disk sampling cost time: ", timer.get_time())
@@ -86,9 +85,9 @@ def run(warm_up=False):
     if not warm_up:
         print("solve cost time: ", timer.get_time())
         plot_point_cloud(
-            vertices, triangles, sampler.points, dirichlet_src.real, point_size
+            vertices, triangles, sampler.points, dirichlet_src.real, point_size, 1.0
         ).show()
-        plot_point_cloud(vertices, triangles, vertices, gt.real, point_size).show()
+        plot_point_cloud(vertices, triangles, vertices, gt.real, point_size, 1.0).show()
 
 
 for obj_id in [2]:

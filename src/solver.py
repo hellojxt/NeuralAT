@@ -116,20 +116,20 @@ class BiCGSTAB_batch:
         self.device = device
 
     def init_params(self, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
-        # b: The R.H.S of the system. of shape (batch_size, n, 1)
-        batch_size = b.shape[0]
-        n = b.shape[1]
+        # b: The R.H.S of the system. of shape (n, 1, batch_size)
+        batch_size = b.shape[2]
+        n = b.shape[0]
         self.b = b.clone().detach()
         self.x = torch.zeros_like(b) if x is None else x
         self.residual_tol = tol * self.batch_vdot(self.b, self.b)
         self.atol = torch.tensor(atol, device=self.device)
-        self.nsteps = b.shape[1] if nsteps is None else nsteps
+        self.nsteps = n if nsteps is None else nsteps
         self.status, self.r = self.check_convergence(self.x)
-        self.rho = torch.ones(batch_size, 1, 1, device=self.device, dtype=b.dtype)
-        self.alpha = torch.ones(batch_size, 1, 1, device=self.device, dtype=b.dtype)
-        self.omega = torch.ones(batch_size, 1, 1, device=self.device, dtype=b.dtype)
-        self.v = torch.zeros(batch_size, n, 1, device=self.device, dtype=b.dtype)
-        self.p = torch.zeros(batch_size, n, 1, device=self.device, dtype=b.dtype)
+        self.rho = torch.ones(1, 1, batch_size, device=self.device, dtype=b.dtype)
+        self.alpha = torch.ones(1, 1, batch_size, device=self.device, dtype=b.dtype)
+        self.omega = torch.ones(1, 1, batch_size, device=self.device, dtype=b.dtype)
+        self.v = torch.zeros(n, 1, batch_size, device=self.device, dtype=b.dtype)
+        self.p = torch.zeros(n, 1, batch_size, device=self.device, dtype=b.dtype)
         self.r_hat = self.r.clone().detach()
 
     def check_convergence(self, x):
@@ -141,10 +141,10 @@ class BiCGSTAB_batch:
             return False, r
 
     def batch_vdot(self, x, y):
-        return torch.linalg.vecdot(x, y, dim=1).real
+        return torch.linalg.vecdot(x, y, dim=0).real
 
     def batch_dot(self, x, y):
-        return torch.linalg.vecdot(torch.conj(x), y, dim=1).unsqueeze(1)
+        return torch.linalg.vecdot(torch.conj(x), y, dim=0).unsqueeze(0)
 
     def step(self):
         rho = self.batch_dot(self.r, self.r_hat)  # rho_i <- <r0, r^>

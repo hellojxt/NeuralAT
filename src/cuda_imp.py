@@ -138,7 +138,7 @@ class ImportanceSampler:
 
 
 class MonteCarloWeight:
-    def __init__(self, trg_points, src_sample, k, deriv=False):
+    def __init__(self, trg_points, src_sample, k=None, deriv=False):
         self.src_sample = src_sample
         self.trg_points = trg_points
         N = trg_points.shape[0]
@@ -200,6 +200,57 @@ class MonteCarloWeight:
             values,
             (N, N),
         )
+
+    def get_weights_sparse_ks(self, resample_num, ks):
+        ks = torch.as_tensor(ks, dtype=torch.float32, device=self.trg_points.device)
+        cuda_method_name = "get_monte_carlo_weight_sparse_ks" + str(int(self.deriv))
+        row_indices, col_indices, values = CUDA_MODULE.get(cuda_method_name)(
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            self.random_state,
+            ks,
+            self.src_sample.cdf[-1],
+            resample_num,
+        )
+        N = len(self.src_sample.points)
+        M = len(ks)
+        row_indices = (
+            torch.arange(N * M + 1, device=self.trg_points.device) * resample_num
+        )
+        col_indices = (
+            col_indices
+            + torch.arange(M, device=self.trg_points.device).reshape(-1, 1) * N
+        ).reshape(-1)
+        values = torch.view_as_complex(values).T.reshape(-1)
+        return torch.sparse_csr_tensor(
+            row_indices,
+            col_indices,
+            values,
+            (N * M, N * M),
+        )
+
+    def get_weights_sparse_ks_fast(self, resample_num, ks):
+        ks = torch.as_tensor(ks, dtype=torch.float32, device=self.trg_points.device)
+        cuda_method_name = "get_monte_carlo_weight_sparse_ks" + str(int(self.deriv))
+        row_indices, col_indices, values = CUDA_MODULE.get(cuda_method_name)(
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            self.random_state,
+            ks,
+            self.src_sample.cdf[-1],
+            resample_num,
+        )
+        return col_indices, values
+
+
+def fast_sparse_matrix_vector_mul(col_indices, values, x):
+    return CUDA_MODULE.get("sparse_matrix_vector_mul")(col_indices, values, x)
+
+
+def fast_sparse_matrix_vector_mul2(col_indices, values, x):
+    return CUDA_MODULE.get("sparse_matrix_vector_mul_fast")(col_indices, values, x)
 
 
 class FDTDSimulator:

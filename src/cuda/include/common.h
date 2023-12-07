@@ -9,6 +9,7 @@
 #include <thrust/complex.h>
 #include "helper_math.h"
 #include <random>
+#include <cuda_runtime.h>
 
 #define NWOB_NAMESPACE_BEGIN \
     namespace nwob           \
@@ -23,6 +24,11 @@ using randomState = curandState_t;
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
 #define FILE_LINE __FILE__ ":" STR(__LINE__)
+#define atomicAddCpxBlock(dst, value)                          \
+    {                                                          \
+        atomicAdd_block((float *)(dst), (value).real());       \
+        atomicAdd_block(((float *)(dst)) + 1, (value).imag()); \
+    }
 
 /// Checks the result of a cuXXXXXX call and throws an error on failure
 #define CU_CHECK_THROW(x)                                                                        \
@@ -124,6 +130,28 @@ template <typename F>
 inline void parallel_for(size_t n_elements, F &&fun)
 {
     parallel_for(0, n_elements, std::forward<F>(fun));
+}
+
+template <typename F>
+__global__ void parallel_for_block_kernel(F fun)
+{
+    fun(blockIdx.x, threadIdx.x);
+}
+
+template <typename F>
+inline void parallel_for_block(uint32_t shmem_size, size_t n_blocks, size_t n_threads, F &&fun)
+{
+    if (n_blocks <= 0 || n_threads <= 0)
+    {
+        return;
+    }
+    parallel_for_block_kernel<F><<<n_blocks, n_threads, shmem_size>>>(fun);
+}
+
+template <typename F>
+inline void parallel_for_block(size_t n_blocks, size_t n_threads, F &&fun)
+{
+    parallel_for(0, n_blocks, n_threads, std::forward<F>(fun));
 }
 
 template <typename F>

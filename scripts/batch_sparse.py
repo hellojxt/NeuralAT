@@ -3,7 +3,11 @@ import sys
 sys.path.append("./")
 
 import torch
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight
+from src.cuda_imp import (
+    ImportanceSampler,
+    MonteCarloWeight,
+    fast_sparse_matrix_vector_mul,
+)
 from src.loader.model import ModalSoundObject
 from src.timer import Timer
 import numpy as np
@@ -21,37 +25,42 @@ def run(warm_up=False):
     timer = Timer(warm_up == False)
     sampler = ImportanceSampler(vertices, triangles, importance, 100000)
     sampler.update()
-    sampler.poisson_disk_resample(0.009, 4)
+    sampler.poisson_disk_resample(0.005, 4)
     timer.log("sample points: ", sampler.num_samples)
 
-    G1_batch = torch.empty(
-        (batch_size, sampler.num_samples, sampler.num_samples),
-        dtype=torch.complex64,
-        device="cuda",
+    resample_num = 512
+    G0_constructor = MonteCarloWeight(sampler.points, sampler)
+    G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
+    G0_constructor.init_random_states(resample_num)
+    G1_constructor.init_random_states(resample_num)
+    timer.log("init random states")
+
+    col_indices_G0, values_G0 = G0_constructor.get_weights_sparse_ks_fast(
+        resample_num, ks
     )
-    b_batch = torch.empty(
-        (batch_size, sampler.num_samples, 1), dtype=torch.complex64, device="cuda"
+    col_indices_G1, values_G1 = G1_constructor.get_weights_sparse_ks_fast(
+        resample_num, ks
     )
 
-    mode_idx = 0
-    for triangle_neumann, k in zip(triangle_neumanns, ks):
-        G0_constructor = MonteCarloWeight(sampler.points, sampler, k)
-        G1_constructor = MonteCarloWeight(sampler.points, sampler, k, deriv=True)
-        G0 = G0_constructor.get_weights_boundary()
-        G1 = G1_constructor.get_weights_boundary()
-        G1_batch[mode_idx] = G1
-        neumann = sampler.get_points_neumann(triangle_neumann)
-        b_batch[mode_idx] = G0 @ neumann
-        mode_idx += 1
+    neumann = triangle_neumanns[sampler.points_index].to(torch.complex64)
+
+    b_batch = fast_sparse_matrix_vector_mul(
+        col_indices_G0, values_G0, neumann
+    ).unsqueeze(1)
 
     timer.log("construct G and b", record=True)
+
     solver = BiCGSTAB_batch(
-        lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
+        lambda x: fast_sparse_matrix_vector_mul(
+            col_indices_G1, values_G1, x.squeeze(1)
+        ).unsqueeze(1)
+        - x
     )
     timer.log("construct A", record=True)
 
-    dirichlet = solver.solve(b_batch.permute(1, 2, 0), tol=0.001, nsteps=20)
+    dirichlet = solver.solve(b_batch, tol=0.001, nsteps=40)
     timer.log("solve", record=True)
+
     if not warm_up and LOG_IMAGE:
         image_paths_full = []
         zoom = 2.0
@@ -99,6 +108,7 @@ def run(warm_up=False):
             ).write_image(img_path)
             crop_center(img_path, crop_width, crop_height)
             image_paths_full.append(image_paths)
+            print(f"mode {mode_idx} write image done")
         combine_images(image_paths_full, f"{OUTPUT_ROOT}/combined.png")
     return timer.record_time
 
@@ -138,6 +148,7 @@ triangles = torch.tensor(sound_object.triangles, dtype=torch.int32).cuda()
 
 batch_size = 32
 triangle_neumanns, ks, gts = generate_data()
+triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
 LOG_IMAGE = False
 run(warm_up=True)
 LOG_IMAGE = True
@@ -148,6 +159,7 @@ batch_size = 1
 time_serial = 0
 for i in range(32):
     triangle_neumanns, ks, gts = generate_data(i)
+    triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
     run(warm_up=True)
     time_serial += run(warm_up=False)
 

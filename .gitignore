@@ -1,9 +1,6 @@
 **/build
 **/__pycache__
 .vscode
+output
 dataset
-figure
-*.pt
-runs
-checkpoints
-images
+.exafmm

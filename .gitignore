@@ -4,3 +4,4 @@
 output
 dataset
 .exafmm
+*.pt

@@ -8,7 +8,7 @@ from src.loader.model import ModalSoundObject
 from src.timer import Timer
 import numpy as np
 from src.visualize import plot_mesh, plot_point_cloud, crop_center, combine_images
-from src.solver import BiCGSTAB, BiCGSTAB_batch
+from src.solver import BiCGSTAB, BiCGSTAB_batch, BiCGSTAB_batch2
 import os
 
 
@@ -24,33 +24,22 @@ def run(warm_up=False):
     sampler.poisson_disk_resample(0.009, 4)
     timer.log("sample points: ", sampler.num_samples)
 
-    G1_batch = torch.empty(
-        (batch_size, sampler.num_samples, sampler.num_samples),
-        dtype=torch.complex64,
-        device="cuda",
-    )
-    b_batch = torch.empty(
-        (batch_size, sampler.num_samples, 1), dtype=torch.complex64, device="cuda"
-    )
+    G0_constructor = MonteCarloWeight(sampler.points, sampler)
+    G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
+    G0_batch = G0_constructor.get_weights_boundary_ks(ks)
+    G1_batch = G1_constructor.get_weights_boundary_ks(ks)
 
-    mode_idx = 0
-    for triangle_neumann, k in zip(triangle_neumanns, ks):
-        G0_constructor = MonteCarloWeight(sampler.points, sampler, k)
-        G1_constructor = MonteCarloWeight(sampler.points, sampler, k, deriv=True)
-        G0 = G0_constructor.get_weights_boundary()
-        G1 = G1_constructor.get_weights_boundary()
-        G1_batch[mode_idx] = G1
-        neumann = sampler.get_points_neumann(triangle_neumann)
-        b_batch[mode_idx] = G0 @ neumann
-        mode_idx += 1
-
+    neumann = (
+        triangle_neumanns[sampler.points_index].to(torch.complex64).T.unsqueeze(-1)
+    )  # (batch_size, n, 1)
+    b_batch = torch.bmm(G0_batch, neumann).permute(1, 2, 0)
     timer.log("construct G and b", record=True)
     solver = BiCGSTAB_batch(
         lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
     )
     timer.log("construct A", record=True)
 
-    dirichlet = solver.solve(b_batch.permute(1, 2, 0), tol=0.001, nsteps=20)
+    dirichlet = solver.solve(b_batch, tol=0.001, nsteps=20)
     timer.log("solve", record=True)
     if not warm_up and LOG_IMAGE:
         image_paths_full = []
@@ -99,6 +88,7 @@ def run(warm_up=False):
             ).write_image(img_path)
             crop_center(img_path, crop_width, crop_height)
             image_paths_full.append(image_paths)
+            print(f"mode {mode_idx} write image done")
         combine_images(image_paths_full, f"{OUTPUT_ROOT}/combined.png")
     return timer.record_time
 
@@ -138,6 +128,7 @@ triangles = torch.tensor(sound_object.triangles, dtype=torch.int32).cuda()
 
 batch_size = 32
 triangle_neumanns, ks, gts = generate_data()
+triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
 LOG_IMAGE = False
 run(warm_up=True)
 LOG_IMAGE = True
@@ -148,6 +139,7 @@ batch_size = 1
 time_serial = 0
 for i in range(32):
     triangle_neumanns, ks, gts = generate_data(i)
+    triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
     run(warm_up=True)
     time_serial += run(warm_up=False)
 

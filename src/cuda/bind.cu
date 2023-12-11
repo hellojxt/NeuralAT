@@ -78,6 +78,37 @@ void get_monte_carlo_weight(const torch::Tensor trg_points,
 }
 
 template <bool deriv>
+void get_monte_carlo_weight_potential_ks(const torch::Tensor trg_points,
+                                         const torch::Tensor src_points,
+                                         const torch::Tensor src_normals,
+                                         const torch::Tensor src_importance,
+                                         const torch::Tensor ks,
+                                         const float cdf_sum)
+{
+    int N = trg_points.size(0), M = src_points.size(0);
+    int batch_size = ks.size(0);
+    torch::Tensor out = torch::empty({batch_size, N, M}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    parallel_for(N * M,
+                 [N, M, batch_size, cdf_sum, trgs = (float3 *)trg_points.data_ptr(),
+                  srcs = (float3 *)src_points.data_ptr(), src_normals = (float3 *)src_normals.data_ptr(),
+                  out = PitchedPtr<float2, 3>((float2 *)out.data_ptr(), batch_size, N, M),
+                  src_importance = (float *)src_importance.data_ptr(), ks = (float *)ks.data_ptr()] __device__(int i) {
+                     int trg_i = i / M, src_i = i % M;
+                     float3 trg = trgs[trg_i];
+                     float3 src = srcs[src_i];
+                     float3 normal = src_normals[src_i];
+                     float W = cdf_sum / src_importance[src_i] / M;
+                     for (int k_i = 0; k_i < batch_size; k_i++)
+                     {
+                         auto weight = Green_func<deriv>(trg, src, normal, ks[k_i]);
+                         out(k_i, trg_i, src_i).x = weight.real() * W;
+                         out(k_i, trg_i, src_i).y = weight.imag() * W;
+                     }
+                 });
+    return out;
+}
+
+template <bool deriv>
 void get_monte_carlo_weight_boundary(const torch::Tensor trg_points,
                                      const torch::Tensor src_points,
                                      const torch::Tensor src_normals,
@@ -109,6 +140,45 @@ void get_monte_carlo_weight_boundary(const torch::Tensor trg_points,
             }
             out[i] = result;
         });
+}
+
+template <bool deriv>
+torch::Tensor get_monte_carlo_weight_boundary_ks(const torch::Tensor trg_points,
+                                                 const torch::Tensor src_points,
+                                                 const torch::Tensor src_normals,
+                                                 const torch::Tensor src_importance,
+                                                 const torch::Tensor ks,
+                                                 const float cdf_sum)
+{
+    int N = trg_points.size(0), M = src_points.size(0);
+    int batch_size = ks.size(0);
+    torch::Tensor out = torch::empty({batch_size, N, M}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    parallel_for(N * M,
+                 [N, M, batch_size, cdf_sum, trgs = (float3 *)trg_points.data_ptr(),
+                  srcs = (float3 *)src_points.data_ptr(), src_normals = (float3 *)src_normals.data_ptr(),
+                  out = PitchedPtr<float2, 3>((float2 *)out.data_ptr(), batch_size, N, M),
+                  src_importance = (float *)src_importance.data_ptr(), ks = (float *)ks.data_ptr()] __device__(int i) {
+                     int trg_i = i / M, src_i = i % M;
+                     float3 trg = trgs[trg_i];
+                     float3 src = srcs[src_i];
+                     float3 normal = src_normals[src_i];
+                     float W;
+                     if (trg_i == src_i)
+                     {
+                         W = 2 * (2 * M_PI * EPS);
+                     }
+                     else
+                     {
+                         W = 2 * (cdf_sum - M_PI * EPS * EPS * src_importance[src_i]) / src_importance[src_i] / (M - 1);
+                     }
+                     for (int k_i = 0; k_i < batch_size; k_i++)
+                     {
+                         auto weight = Green_func<deriv>(trg, src, normal, ks[k_i]);
+                         out(k_i, trg_i, src_i).x = weight.real() * W;
+                         out(k_i, trg_i, src_i).y = weight.imag() * W;
+                     }
+                 });
+    return out;
 }
 
 class Reservoir
@@ -335,8 +405,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("FDTD_simulation", &FDTD_simulation, "");
     m.def("get_monte_carlo_weight1", &get_monte_carlo_weight<true>, "");
     m.def("get_monte_carlo_weight0", &get_monte_carlo_weight<false>, "");
+    m.def("get_monte_carlo_weight_potential_ks1", &get_monte_carlo_weight_potential_ks<true>, "");
+    m.def("get_monte_carlo_weight_potential_ks0", &get_monte_carlo_weight_potential_ks<false>, "");
     m.def("get_monte_carlo_weight_boundary1", &get_monte_carlo_weight_boundary<true>, "");
     m.def("get_monte_carlo_weight_boundary0", &get_monte_carlo_weight_boundary<false>, "");
+    m.def("get_monte_carlo_weight_boundary_ks1", &get_monte_carlo_weight_boundary_ks<true>, "");
+    m.def("get_monte_carlo_weight_boundary_ks0", &get_monte_carlo_weight_boundary_ks<false>, "");
     m.def("get_monte_carlo_weight_sparse1", &get_monte_carlo_weight_sparse<true>, "");
     m.def("get_monte_carlo_weight_sparse0", &get_monte_carlo_weight_sparse<false>, "");
     m.def("get_monte_carlo_weight_sparse_ks1", &get_monte_carlo_weight_sparse_ks<true>, "");

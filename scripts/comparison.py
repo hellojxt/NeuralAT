@@ -11,7 +11,6 @@ from src.cuda_imp import (
 )
 from src.loader.model import ModalSoundObject, SoundObjList, SimpleSoundObject, BEMModel
 import numpy as np
-from src.net import get_mlps, ComplexMLPS
 from src.visualize import plot_mesh, plot_mesh_with_plane
 from src.solver import BiCGSTAB
 import os

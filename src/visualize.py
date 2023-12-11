@@ -8,6 +8,13 @@ import torch
 from PIL import Image
 
 
+def torch_to_numpy(tensor):
+    if isinstance(tensor, torch.Tensor):
+        return tensor.detach().cpu().numpy()
+    else:
+        return tensor
+
+
 def combine_images(image_paths, output_path):
     """
     Combines multiple images into a single image.
@@ -61,87 +68,78 @@ def crop_center(image_path, crop_width, crop_height):
 
 
 def plot_mesh(
-    vertices, triangles, data=None, names=None, cmin=None, cmax=None, back_ground=False
+    vertices,
+    triangles,
+    data=None,
+    names=None,
+    cmin=None,
+    cmax=None,
 ):
     """
     vertices: (N, 3)
     triangles: (M, 3)
-    data: (N, K)
-    names: (K, )
+    data: (N, K) or (M, K)
+    names: (K)
     """
     if data is None:
         data = np.zeros((vertices.shape[0], 1))
+    if len(data.shape) == 1:
+        data = data.reshape(-1, 1)
     if names is None:
         names = [str(i) for i in range(data.shape[1])]
 
-    rows = data.shape[1] // 3  # Assuming you want 3 columns
-    cols = 3
-    fig = make_subplots(
-        rows=rows,
-        cols=cols,
-        subplot_titles=names,
-        start_cell="top-left",
-        specs=[[{"type": "mesh3d"}] * cols for _ in range(rows)],
-        horizontal_spacing=0.0,
-        vertical_spacing=0.0,
-    )
-    colorbar_xs = [0.33, 0.66, 0.99]
-    colorbar_dy = 1.0 / rows
-    colorbar_ys = [0.75 - i * colorbar_dy for i in range(rows)]
+    vertices, triangles, data = [torch_to_numpy(x) for x in [vertices, triangles, data]]
+    if cmin is None:
+        cmin = data.min()
+    if cmax is None:
+        cmax = data.max()
 
+    fig = go.Figure()
+    # Add traces, one for each slider step
     for i in range(data.shape[1]):
-        color_data = data[:, i]
-        row = (i // cols) + 1
-        col = (i % cols) + 1
-        x = vertices[:, 0]
-        y = vertices[:, 1]
-        z = vertices[:, 2]
-
-        mesh = go.Mesh3d(
-            x=x,
-            y=y,
-            z=z,
-            i=triangles[:, 0],
-            j=triangles[:, 1],
-            k=triangles[:, 2],
-            intensity=color_data,
-            colorscale="Viridis",
-            opacity=1,
-            cmin=cmin,
-            cmax=cmax,
-            colorbar=dict(
-                thickness=20,
-                len=0.8 / rows,  # 设置colorbar的长度
-                x=colorbar_xs[col - 1],  # 设置colorbar的位置
-                y=colorbar_ys[row - 1],  # 设置colorbar的位置
-            ),
-            lighting=dict(
-                ambient=1.0, diffuse=0.0, specular=0.0, fresnel=0.0
-            ),  # 关闭光照效果
+        fig.add_trace(
+            go.Mesh3d(
+                x=vertices[:, 0],
+                y=vertices[:, 1],
+                z=vertices[:, 2],
+                i=triangles[:, 0],
+                j=triangles[:, 1],
+                k=triangles[:, 2],
+                colorscale="Viridis",
+                intensity=data[:, i],
+                intensitymode="cell"
+                if data.shape[0] == triangles.shape[0]
+                else "vertex",
+                cmin=cmin,
+                cmax=cmax,
+                showscale=True,
+                name=names[i],
+                visible=False,
+            )
         )
 
-        fig.add_trace(mesh, row=row, col=col)
+    fig.data[0].visible = True
 
-    for i in range(data.shape[1]):
-        if i == 0:
-            subname = ""
-        else:
-            subname = str(i + 1)
-
-        fig.update_layout(
-            {
-                "scene"
-                + subname: {
-                    "xaxis": {"visible": back_ground},
-                    "yaxis": {"visible": back_ground},
-                    "zaxis": {"visible": back_ground},
-                },
-                "scene" + subname + "_aspectmode": "data",
-            }
+    # Create and add slider
+    steps = []
+    for i in range(len(fig.data)):
+        step = dict(
+            method="update",
+            args=[
+                {"visible": [False] * len(fig.data)},
+                {"title": "Switched to feature: " + str(i)},
+            ],  # layout attribute
         )
-    fig.update_layout(font_family="Linux Biolinum", font_size=20)
-    fig.update_annotations(font_size=30)
-    fig.update_layout(margin=dict(l=0, r=0, t=30, b=0))
+        step["args"][0]["visible"][i] = True  # Toggle i'th trace to "visible"
+        steps.append(step)
+
+    sliders = [
+        dict(
+            active=10, currentvalue={"prefix": "Feature: "}, pad={"t": 50}, steps=steps
+        )
+    ]
+    fig.update_layout(sliders=sliders)
+
     return fig
 
 
@@ -179,6 +177,7 @@ def plot_point_cloud(
             opacity=1.0,
             cmin=cmin,
             cmax=cmax,
+            colorbar=dict(title=""),
         ),
     )
 
@@ -193,11 +192,8 @@ def plot_point_cloud(
         i=triangles[:, 0],
         j=triangles[:, 1],
         k=triangles[:, 2],
-        intensity=-np.zeros(len(vertices)),
         colorscale="Viridis",
         opacity=mesh_opacity,
-        cmin=-1,
-        cmax=1,
         # lighting=dict(ambient=1.0, diffuse=1.0, specular=1.0, fresnel=0.0),  # 关闭光照效果
     )
     fig = go.Figure(data=[mesh, scatter])
@@ -217,13 +213,6 @@ def plot_point_cloud(
         )
     )
     return fig
-
-
-def torch_to_numpy(tensor):
-    if isinstance(tensor, torch.Tensor):
-        return tensor.detach().cpu().numpy()
-    else:
-        return tensor
 
 
 def plot_mesh_with_plane(
@@ -279,7 +268,6 @@ def plot_mesh_with_plane(
     fig = go.Figure()
 
     # Add mesh trace
-    color_data = mesh_data
     fig.add_trace(
         go.Mesh3d(
             x=vertices[:, 0],
@@ -288,16 +276,10 @@ def plot_mesh_with_plane(
             i=triangles[:, 0],
             j=triangles[:, 1],
             k=triangles[:, 2],
-            intensity=color_data,
-            colorscale="Viridis",
             opacity=mesh_opacity,
             cmin=cmin,
             cmax=cmax,
-            colorbar=dict(thickness=20),
             visible=True,  # Mesh is always visible
-            lighting=dict(
-                ambient=1.0, diffuse=0.0, specular=0.0, fresnel=0.0
-            ),  # 关闭光照效果
             name="",  # Don't show legend for mesh
         )
     )
@@ -347,6 +329,7 @@ def plot_mesh_with_plane(
                         opacity=1.0,
                         cmin=cmin,
                         cmax=cmax,
+                        colorbar=dict(title=""),
                     ),
                     visible=False,
                     name="",  # Don't show legend for mesh
@@ -364,6 +347,7 @@ def plot_mesh_with_plane(
                     cmin=cmin,
                     cmax=cmax,
                     colorscale="Viridis",
+                    colorbar=dict(title=""),
                     showscale=False,  # Hide color scale for the plane
                     lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0, fresnel=0.0),
                     name="",  # Don't show legend for mesh

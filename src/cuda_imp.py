@@ -168,6 +168,18 @@ class MonteCarloWeight:
         )
         return torch.view_as_complex(self.weights_)
 
+    def get_weights_potential_ks(self, ks):
+        ks = torch.as_tensor(ks, dtype=torch.float32, device=self.trg_points.device)
+        cuda_method_name = "get_monte_carlo_weight_potential_ks" + str(int(self.deriv))
+        return CUDA_MODULE.get(cuda_method_name)(
+            self.trg_points,
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            ks,
+            self.src_sample.cdf[-1],
+        )
+
     def get_weights_boundary(self, k=None):
         cuda_method_name = "get_monte_carlo_weight_boundary" + str(int(self.deriv))
         CUDA_MODULE.get(cuda_method_name)(
@@ -180,6 +192,18 @@ class MonteCarloWeight:
             self.weights_,
         )
         return torch.view_as_complex(self.weights_)
+
+    def get_weights_boundary_ks(self, ks):
+        ks = torch.as_tensor(ks, dtype=torch.float32, device=self.trg_points.device)
+        cuda_method_name = "get_monte_carlo_weight_boundary_ks" + str(int(self.deriv))
+        return CUDA_MODULE.get(cuda_method_name)(
+            self.trg_points,
+            self.src_sample.points,
+            self.src_sample.points_normals,
+            self.src_sample.points_importance,
+            ks,
+            self.src_sample.cdf[-1],
+        )
 
     def get_weights_sparse(self, resample_num, k=None):
         cuda_method_name = "get_monte_carlo_weight_sparse" + str(int(self.deriv))

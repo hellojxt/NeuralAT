@@ -37,7 +37,7 @@ class BEMModel:
     def get_dirichlet_coeff(self):
         return self.dirichlet_fun.coefficients
 
-    def boundary_equation_solve(self, neumann_coeff):
+    def boundary_equation_solve(self, neumann_coeff, tol=1e-6, maxiter=2000):
         neumann_fun = GridFunction(
             self.dp0_space, coefficients=np.asarray(neumann_coeff)
         )
@@ -70,7 +70,7 @@ class BEMModel:
         left_side = -0.5 * M + K
         right_side = V * self.neumann_fun
         dirichlet_fun, info, res = bempp.api.linalg.gmres(
-            left_side, right_side, tol=1e-6, maxiter=2000, return_residuals=True
+            left_side, right_side, tol=tol, maxiter=maxiter, return_residuals=True
         )
         self.dirichlet_fun = dirichlet_fun
         return res

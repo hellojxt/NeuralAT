@@ -37,6 +37,18 @@ class BEMModel:
     def get_dirichlet_coeff(self):
         return self.dirichlet_fun.coefficients
 
+    def set_neumann(self, neumann_coeff):
+        neumann_fun = GridFunction(
+            self.dp0_space, coefficients=np.asarray(neumann_coeff)
+        )
+        self.neumann_fun = neumann_fun
+
+    def set_dirichlet(self, dirichlet_coeff):
+        dirichlet_fun = GridFunction(
+            self.p1_space, coefficients=np.asarray(dirichlet_coeff)
+        )
+        self.dirichlet_fun = dirichlet_fun
+
     def boundary_equation_solve(self, neumann_coeff, tol=1e-6, maxiter=2000):
         neumann_fun = GridFunction(
             self.dp0_space, coefficients=np.asarray(neumann_coeff)

@@ -21,6 +21,19 @@ class SoundObj:
             self.surf_vertices, self.surf_triangles
         )
 
+    def normalize(self, scale=1.0):
+        self.vertices = (self.vertices - (self.bbox_max + self.bbox_min) / 2) / (
+            self.bbox_max - self.bbox_min
+        ).max()
+        self.vertices = self.vertices * scale
+        self.surf_vertices = (
+            self.surf_vertices - (self.bbox_max + self.bbox_min) / 2
+        ) / (self.bbox_max - self.bbox_min).max()
+
+        self.surf_vertices = self.surf_vertices * scale
+        self.bbox_min = self.vertices.min(axis=0)
+        self.bbox_max = self.vertices.max(axis=0)
+
     def modal_analysis(self, k=32, material=Material(MatSet.Plastic)):
         self.fem_model = FEMmodel(self.vertices, self.tets, material)
         eigenvalues, eigenvectors = LOBPCG_solver(
@@ -45,6 +58,9 @@ class SoundObj:
             data[:, i] = self.get_triangle_neumann(mode_id)
         return data
 
+    def get_frequencies(self):
+        return self.eigenvalues**0.5 / (2 * np.pi)
+
     def get_frequency(self, mode_id):
         return self.eigenvalues[mode_id] ** 0.5 / (2 * np.pi)
 
@@ -62,7 +78,15 @@ class SoundObj:
             self.get_wave_number(mode_id),
         )
         residual = bem_model.boundary_equation_solve(triangle_neumann, tol, maxiter)
-        return bem_model
+        if len(residual) == 0:
+            return bem_model, 0
+        return bem_model, residual[-1]
 
-    def solve_points_dirichlet(self, bem_model, points):
-        return bem_model.potential_solve(points)
+
+def solve_points_dirichlet(
+    vertices, triangles, neumann, dirichlet, wave_number, points
+):
+    bem_model = BEMModel(vertices, triangles, wave_number)
+    bem_model.set_dirichlet(dirichlet)
+    bem_model.set_neumann(neumann)
+    return bem_model.potential_solve(points)

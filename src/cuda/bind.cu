@@ -78,12 +78,12 @@ void get_monte_carlo_weight(const torch::Tensor trg_points,
 }
 
 template <bool deriv>
-void get_monte_carlo_weight_potential_ks(const torch::Tensor trg_points,
-                                         const torch::Tensor src_points,
-                                         const torch::Tensor src_normals,
-                                         const torch::Tensor src_importance,
-                                         const torch::Tensor ks,
-                                         const float cdf_sum)
+torch::Tensor get_monte_carlo_weight_potential_ks(const torch::Tensor trg_points,
+                                                  const torch::Tensor src_points,
+                                                  const torch::Tensor src_normals,
+                                                  const torch::Tensor src_importance,
+                                                  const torch::Tensor ks,
+                                                  const float cdf_sum)
 {
     int N = trg_points.size(0), M = src_points.size(0);
     int batch_size = ks.size(0);

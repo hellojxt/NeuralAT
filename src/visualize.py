@@ -197,16 +197,16 @@ def plot_point_cloud(
         # lighting=dict(ambient=1.0, diffuse=1.0, specular=1.0, fresnel=0.0),  # 关闭光照效果
     )
     fig = go.Figure(data=[mesh, scatter])
-    fig.update_layout(
-        {
-            "scene": {
-                "xaxis": {"visible": False},
-                "yaxis": {"visible": False},
-                "zaxis": {"visible": False},
-            },
-            "scene_aspectmode": "data",
-        }
-    )
+    # fig.update_layout(
+    #     {
+    #         "scene": {
+    #             "xaxis": {"visible": False},
+    #             "yaxis": {"visible": False},
+    #             "zaxis": {"visible": False},
+    #         },
+    #         "scene_aspectmode": "data",
+    #     }
+    # )
     fig.update_layout(
         scene_camera=dict(
             eye=dict(x=0, y=0.5 * zoom, z=1.5 * zoom), up=dict(x=0, y=1, z=0)

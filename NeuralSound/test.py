@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("./")
+sys.path.append("./NeuralSound/")
 from dataset_test import (
     AcousticDatasetFar,
     acoustic_collation_fn,
@@ -33,18 +33,27 @@ def to_img(data1, data2, filename):
 
 
 def forward_fun(items):
-    bcoords, feats_in, feats_out, feats_out_norm, filename = items
-    # t = time()
+    bcoords, feats_in, feats_in_norm, feats_out, feats_out_norm, filename = items
+    torch.cuda.synchronize()
+    start_time = time()
     ffat_map, ffat_norm = Config.net(bcoords, feats_in)
+    ffat_norm = (ffat_norm * 3 - 8).exp()
+    # feats_out_norm = (np.log(feats_out_norm) + 8) / 3
     # check_shape(bcoords, feats_in, freq_norm, feats_out, feats_out_norm,ffat_map, ffat_norm)
-    # print('time cost:', time() - t)
-    print(filename)
-    with torch.set_grad_enabled(False):
-        log_dir = f"./output/{Config.tag}"
-        os.makedirs(log_dir, exist_ok=True)
-        gt, predict = feats_out[0, 0], ffat_map[0, 0]
-        to_img(gt, predict, f"{log_dir}/{Config.idx_in_epoch}.png")
-
+    torch.cuda.synchronize()
+    cost_time = time() - start_time
+    ffat_map = (
+        ffat_map
+        * ffat_norm.unsqueeze(-1).unsqueeze(-1)
+        * feats_in_norm.unsqueeze(-1).unsqueeze(-1)
+    )
+    out_path = filename[0].replace("acoustic", "NeuralSound")
+    print(out_path)
+    np.savez_compressed(
+        out_path,
+        ffat_map=ffat_map.detach().cpu().numpy(),
+        cost_time=cost_time,
+    )
     return ffat_map, ffat_norm, feats_out, feats_out_norm
 
 
@@ -63,12 +72,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", type=str, default="default")
     parser.add_argument("--suffix", type=str, default="")
-    parser.add_argument("--dataset", type=str, default="dataset/acousticData")
+    parser.add_argument("--dataset", type=str, default="dataset/ABC/data/acoustic")
     parser.add_argument("--linear", dest="linear", action="store_true")
     parser.set_defaults(linear=False)
     parser.add_argument("--far", dest="far", action="store_true")
     parser.set_defaults(far=False)
-    parser.add_argument("--wdir", type=str, default="./")
+    parser.add_argument("--wdir", type=str, default="./NeuralSound")
     args = parser.parse_args()
     Config.dataset_root_dir = args.dataset
     Config.tag = args.tag
@@ -85,9 +94,9 @@ if __name__ == "__main__":
     Config.scheduler = optim.lr_scheduler.StepLR(
         Config.optimizer, step_size=8, gamma=0.8
     )
-    Config.BATCH_SIZE = 1
+    Config.BATCH_SIZE = 16
     Config.dataset_worker_num = 8
     Config.weights_dir = args.wdir
     Config.load_weights = True
     Config.only_test = True
-    start_train(2)
+    start_train(1)

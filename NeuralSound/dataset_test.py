@@ -92,12 +92,13 @@ class AcousticDataset(Dataset):
         feats_out = feats_out / feats_in_norm
         feats_out_norm = (feats_out**2).mean() ** 0.5
         # print(feats_out_norm)
-        feats_out = feats_out / feats_out_norm
-        feats_out_norm = (np.log(feats_out_norm) + 8) / 3
+        # feats_out = feats_out / feats_out_norm
+        # feats_out_norm = (np.log(feats_out_norm) + 8) / 3
 
         return (
             coords,
             feats_in,
+            feats_in_norm,
             feats_out,
             feats_out_norm,
             filename,
@@ -112,6 +113,7 @@ def acoustic_collation_fn(datas):
     (
         coords,
         feats_in,
+        feats_in_norm,
         feats_out,
         feats_out_norm,
         filename,
@@ -120,12 +122,14 @@ def acoustic_collation_fn(datas):
     bcoords = ME.utils.batched_coordinates(coords)
     # Concatenate all lists
     feats_in = torch.from_numpy(np.concatenate(feats_in, axis=0)).float()
+    feats_in_norm = torch.tensor(feats_in_norm).float().unsqueeze(-1)
     feats_out = torch.from_numpy(np.stack(feats_out, axis=0)).float()
     # freq_norm = torch.tensor(freq_norm).float().unsqueeze(-1)
     feats_out_norm = torch.tensor(feats_out_norm).float().unsqueeze(-1)
     return (
         bcoords,
         feats_in,
+        feats_in_norm,
         feats_out,
         feats_out_norm,
         filename,

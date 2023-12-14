@@ -30,6 +30,19 @@ class MatSet:
     Steel = 7850, 2.0e11, 0.29, 5, 3e-8
     Tin = 7265, 5e10, 0.325, 2, 3e-8
 
+    def random_material():
+        mat_lst = [
+            MatSet.Ceramic,
+            MatSet.Glass,
+            MatSet.Wood,
+            MatSet.Plastic,
+            MatSet.Iron,
+            MatSet.Polycarbonate,
+            MatSet.Steel,
+            MatSet.Tin,
+        ]
+        return Material(mat_lst[np.random.randint(0, len(mat_lst))])
+
 
 class Material(object):
     def __init__(self, material):

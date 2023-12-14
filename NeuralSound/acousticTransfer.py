@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("./")
+sys.path.append("./NeuralSound/")
 from classic.fem.util import to_sparse_coords, vertex_to_voxel_matrix
 from classic.bem.ffat import ffat_to_imgs, vibration_to_ffat
 from classic.bem.util import boundary_encode, boundary_voxel
@@ -41,13 +41,13 @@ def process_single_model(filename, output_name):
     # print(vecs.shape, freqs.shape)
     image_size = 32
 
-    ffat_map, ffat_map_far = vibration_to_ffat(
-        coords, vecs, freqs, image_size=image_size
-    )
-
-    # ffat_map, ffat_map_far = np.zeros((mode_num, 2 * image_size, image_size)), np.zeros(
-    #     (mode_num, 2 * image_size, image_size)
+    # ffat_map, ffat_map_far = vibration_to_ffat(
+    #     coords, vecs, freqs, image_size=image_size
     # )
+
+    ffat_map, ffat_map_far = np.zeros((mode_num, 2 * image_size, image_size)), np.zeros(
+        (mode_num, 2 * image_size, image_size)
+    )
 
     # ffat_to_imgs(ffat_map, "./", tag="ffat")
     # ffat_to_imgs(ffat_map_far, "./", tag="ffat_far")

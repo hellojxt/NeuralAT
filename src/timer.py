@@ -3,7 +3,7 @@ import torch
 
 
 class Timer:
-    def __init__(self, log_output=True):
+    def __init__(self, log_output=False):
         self.start_time = time.time()
         self.log_output = log_output
         self.record_time = 0

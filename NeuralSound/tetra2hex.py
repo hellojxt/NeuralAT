@@ -23,6 +23,8 @@ for eigen_path in tqdm(eigen_list):
     out_path = eigen_path.replace("eigen", "acoustic")
     if os.path.exists(out_path):
         continue
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
     data = np.load(eigen_path)
     vertices, triangles = data["vertices"], data["triangles"]
     wave_number = data["wave_number"]

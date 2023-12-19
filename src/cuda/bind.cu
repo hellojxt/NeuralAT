@@ -22,7 +22,6 @@ HOST_DEVICE inline complex Green_func<false>(float3 y, float3 x, float3 xn, floa
         return exp(complex(0, k * r)) / (4 * M_PI);
     return exp(complex(0, k * r)) / (4 * M_PI * r);
 }
-
 template <>
 HOST_DEVICE inline complex Green_func<true>(float3 y, float3 x, float3 xn, float k)
 {
@@ -394,6 +393,27 @@ torch::Tensor sparse_matrix_vector_mul_fast(const torch::Tensor col_indices_,
 }
 
 #include "poisson.h"
+#include "multipole.h"
+
+template <bool deriv, int N>
+torch::Tensor get_multipole_values(torch::Tensor x0_, torch::Tensor n0_, torch::Tensor x_, torch::Tensor n_, float k)
+{
+    static_assert(std::is_same<std::integral_constant<int, N>, std::integral_constant<int, 0>>::value ||
+                      std::is_same<std::integral_constant<int, N>, std::integral_constant<int, 1>>::value,
+                  "N must be either 0 or 1.");
+    float3 x0 = make_float3(x0_[0].item<float>(), x0_[1].item<float>(), x0_[2].item<float>());
+    float3 n0 = make_float3(n0_[0].item<float>(), n0_[1].item<float>(), n0_[2].item<float>());
+    auto x = (float3 *)x_.data_ptr();
+    auto n = (float3 *)n_.data_ptr();
+    auto out_ = torch::empty({x_.size(0)}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    auto out = (complex *)out_.data_ptr();
+    parallel_for(x_.size(0), [=] __device__(int i) {
+        float3 x_i = x[i];
+        float3 n_i = n[i];
+        out[i] = multipole<N, deriv>(x0, x_i, n0, n_i, k);
+    });
+    return out_;
+}
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
@@ -417,4 +437,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("get_monte_carlo_weight_sparse_ks0", &get_monte_carlo_weight_sparse_ks<false>, "");
     m.def("sparse_matrix_vector_mul", &sparse_matrix_vector_mul, "");
     m.def("sparse_matrix_vector_mul_fast", &sparse_matrix_vector_mul_fast, "");
+    m.def("get_multipole_values_0_deriv", &get_multipole_values<true, 0>, "");
+    m.def("get_multipole_values_1_deriv", &get_multipole_values<true, 1>, "");
+    m.def("get_multipole_values_0", &get_multipole_values<false, 0>, "");
+    m.def("get_multipole_values_1", &get_multipole_values<false, 1>, "");
 }

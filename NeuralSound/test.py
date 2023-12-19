@@ -48,7 +48,7 @@ def forward_fun(items):
         * feats_in_norm.unsqueeze(-1).unsqueeze(-1)
     )
     out_path = filename[0].replace("acoustic", "NeuralSound")
-    print(out_path)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     np.savez_compressed(
         out_path,
         ffat_map=ffat_map.detach().cpu().numpy(),

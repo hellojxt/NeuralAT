@@ -42,6 +42,19 @@ class CUDA_MODULE:
 CUDA_MODULE.load(Debug=False, MemoryCheck=False, Verbose=False)
 
 
+def multipole(x0, n0, x, n, k, M, deriv):
+    """
+    Compute the multipole expansion of the Green's function.
+    """
+    check_tensor(x0, torch.float32)
+    check_tensor(x, torch.float32)
+    check_tensor(n, torch.float32)
+    cuda_method_name = "get_multipole_values_" + str(M)
+    if deriv:
+        cuda_method_name += "_deriv"
+    return CUDA_MODULE.get(cuda_method_name)(x0, n0, x, n, k)
+
+
 def check_tensor(tensor, dtype):
     assert tensor.dtype == dtype
     assert tensor.is_cuda

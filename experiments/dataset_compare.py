@@ -54,7 +54,7 @@ def save_ffat_maps(ffat_map, img_path):
     plt.savefig(img_path)
 
 
-for eigen_path in tqdm(eigen_list):
+def process(eigen_path, out_path):
     data = np.load(eigen_path)
     vertices, triangles = data["vertices"], data["triangles"]
     neumann_bem, dirichlet_bem = data["neumann"], data["dirichlet"]
@@ -68,59 +68,59 @@ for eigen_path in tqdm(eigen_list):
     neumann = torch.from_numpy(neumann_bem).cuda().to(torch.complex64).T.unsqueeze(-1)
     # print(neumann.shape)  # (batch_size, n, 1)
 
-    timer = Timer(log_output=True)
-    importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
-    sampler = ImportanceSampler(vertices, triangles, importance, 100000)
-    sampler.update()
-    sampler.poisson_disk_resample(0.004, 4)
-    timer.log("sample points: ", sampler.num_samples, record=True)
+    # timer = Timer(log_output=True)
+    # importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
+    # sampler = ImportanceSampler(vertices, triangles, importance, 100000)
+    # sampler.update()
+    # sampler.poisson_disk_resample(0.004, 4)
+    # timer.log("sample points: ", sampler.num_samples, record=True)
 
-    G0_constructor = MonteCarloWeight(sampler.points, sampler)
-    G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
-    G0_batch = G0_constructor.get_weights_boundary_ks(ks)
-    G1_batch = G1_constructor.get_weights_boundary_ks(ks)
-    neumann = neumann[:, sampler.points_index, :]
-    b_batch = torch.bmm(G0_batch, neumann).permute(1, 2, 0)
-    timer.log("construct G and b", record=True)
+    # G0_constructor = MonteCarloWeight(sampler.points, sampler)
+    # G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
+    # G0_batch = G0_constructor.get_weights_boundary_ks(ks)
+    # G1_batch = G1_constructor.get_weights_boundary_ks(ks)
+    # neumann = neumann[:, sampler.points_index, :]
+    # b_batch = torch.bmm(G0_batch, neumann).permute(1, 2, 0)
+    # timer.log("construct G and b", record=True)
 
-    solver = BiCGSTAB_batch(
-        lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
-    )
-    timer.log("construct A", record=True)
+    # solver = BiCGSTAB_batch(
+    #     lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
+    # )
+    # timer.log("construct A", record=True)
 
-    dirichlet = solver.solve(b_batch, tol=1e-3, nsteps=20).permute(2, 0, 1)
-    timer.log("solve", record=True)
+    # dirichlet = solver.solve(b_batch, tol=1e-6, nsteps=20).permute(2, 0, 1)
+    # timer.log("solve", record=True)
 
-    cost_time = timer.record_time
+    # cost_time = timer.record_time
 
-    print("bem cost time: ", bem_cost_time)
-    print("ours cost time: ", cost_time)
+    # print("bem cost time: ", bem_cost_time)
+    # print("ours cost time: ", cost_time)
 
     image_size = 32
     length = 0.15
     points_ = unit_sphere_surface_points(image_size) * length
     points_list = [points_ * 1.25, points_ * 1.25**2, points_ * 1.25**3]
 
-    ffat_maps_ours = []
-    for points in points_list:
-        points = torch.from_numpy(points).cuda().float().reshape(-1, 3)
-        points_batch = 256
-        idx = 0
-        ffat_map = torch.zeros((mode_num, image_size * 2 * image_size)).cuda()
-        while idx < len(points):
-            stride = min(points_batch, len(points) - idx)
-            sub_points = points[idx : idx + stride]
-            G0_constructor = MonteCarloWeight(sub_points, sampler)
-            G1_constructor = MonteCarloWeight(sub_points, sampler, deriv=True)
-            G0 = G0_constructor.get_weights_potential_ks(ks)
-            G1 = G1_constructor.get_weights_potential_ks(ks)
-            # print(G0.shape, G1.shape, dirichlet.shape, neumann.shape)
-            RHS = G1 @ dirichlet - G0 @ neumann
-            ffat_map[:, idx : idx + stride] = RHS.reshape(mode_num, -1).abs()
-            idx += stride
-        ffat_map = ffat_map.reshape(mode_num, image_size * 2, image_size)
-        ffat_maps_ours.append(ffat_map.cpu().numpy())
-        # print(ffat_map.shape)
+    # ffat_maps_ours = []
+    # for points in points_list:
+    #     points = torch.from_numpy(points).cuda().float().reshape(-1, 3)
+    #     points_batch = 256
+    #     idx = 0
+    #     ffat_map = torch.zeros((mode_num, image_size * 2 * image_size)).cuda()
+    #     while idx < len(points):
+    #         stride = min(points_batch, len(points) - idx)
+    #         sub_points = points[idx : idx + stride]
+    #         G0_constructor = MonteCarloWeight(sub_points, sampler)
+    #         G1_constructor = MonteCarloWeight(sub_points, sampler, deriv=True)
+    #         G0 = G0_constructor.get_weights_potential_ks(ks)
+    #         G1 = G1_constructor.get_weights_potential_ks(ks)
+    #         # print(G0.shape, G1.shape, dirichlet.shape, neumann.shape)
+    #         RHS = G1 @ dirichlet - G0 @ neumann
+    #         ffat_map[:, idx : idx + stride] = RHS.reshape(mode_num, -1).abs()
+    #         idx += stride
+    #     ffat_map = ffat_map.reshape(mode_num, image_size * 2, image_size)
+    #     ffat_maps_ours.append(ffat_map.cpu().numpy())
+    #     # print(ffat_map.shape)
 
     ffat_maps_bem = []
     vertices = vertices.cpu().numpy()
@@ -149,11 +149,25 @@ for eigen_path in tqdm(eigen_list):
         ffat_maps_neuralsound.append(ffat_map)
 
     np.savez_compressed(
-        eigen_path.replace("eigen", "compare"),
-        ours=ffat_maps_ours,
+        out_path,
+        # ours=ffat_maps_ours,
         bem=ffat_maps_bem,
         neuralsound=ffat_maps_neuralsound,
-        ours_time=cost_time,
+        # ours_time=cost_time,
         bem_time=bem_cost_time,
         neuralsound_time=ns_data["cost_time"],
     )
+
+
+warm_start = False
+for eigen_path in tqdm(eigen_list):
+    out_path = eigen_path.replace("eigen", "compare")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    if not warm_start:
+        process(eigen_path, out_path)
+        warm_start = True
+        process(eigen_path, out_path)
+    else:
+        if os.path.exists(out_path):
+            continue
+        process(eigen_path, out_path)

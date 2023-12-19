@@ -1,7 +1,7 @@
 import sys
 
 sys.path.append("./")
-from src.loader.model import ModalSoundObject
+from src.kleinpat_loader.model import ModalSoundObject
 
 for obj_id in [2]:
     sound_object = ModalSoundObject(f"dataset/0000{obj_id}")

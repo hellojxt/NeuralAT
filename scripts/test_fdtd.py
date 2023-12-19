@@ -4,7 +4,7 @@ sys.path.append("./")
 
 import torch
 from src.cuda_imp import FDTDSimulator, get_bound_info
-from src.loader.model import SimpleSoundObject
+from src.kleinpat_loader.model import SimpleSoundObject
 from src.visualize import plot_mesh_with_plane
 import os
 import time

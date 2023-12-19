@@ -5,9 +5,89 @@ from .bempp import BEMModel
 from .mesh_process import tetra_from_mesh, update_triangle_normals
 from scipy.spatial import KDTree
 from .fem import FEMmodel, LOBPCG_solver, Material, MatSet
+from ..cuda_imp import multipole
+import torch
+from numba import njit
 
 
-class SoundObj:
+def SNR(ground_truth, prediction):
+    return 10 * np.log10(
+        np.abs(np.sum(ground_truth**2))
+        / np.abs(np.sum((ground_truth - prediction) ** 2))
+    )
+
+
+class MultipoleModel:
+    def __init__(self, x0, n0, k, M):
+        self.x0 = torch.tensor(x0).float().cuda()
+        self.n0 = torch.tensor(n0).float().cuda()
+        self.k = k
+        self.M = M
+
+    def solve_dirichlet(self, points):
+        if isinstance(points, np.ndarray):
+            points = torch.tensor(points).float().cuda().reshape(-1, 3)
+        return multipole(self.x0, self.n0, points, points, self.k, self.M, False)
+
+    def solve_neumann(self, points, normals):
+        if isinstance(points, np.ndarray):
+            points = torch.tensor(points).float().cuda().reshape(-1, 3)
+        if isinstance(normals, np.ndarray):
+            normals = torch.tensor(normals).float().cuda().reshape(-1, 3)
+        return multipole(self.x0, self.n0, points, normals, self.k, self.M, True)
+
+
+@njit()
+def unit_sphere_surface_points(res):
+    # r = 0.5
+    points = np.zeros((2 * res, res, 3))
+    phi_spacing = 2 * np.pi / (res * 2 - 1)
+    theta_spacing = np.pi / (res - 1)
+    for i in range(2 * res):
+        for j in range(res):
+            phi = phi_spacing * i
+            theta = theta_spacing * j
+            x = np.sin(theta) * np.cos(phi)
+            y = np.sin(theta) * np.sin(phi)
+            z = np.cos(theta)
+            points[i, j] = [x, y, z]
+    return points * 0.5
+
+
+def update_normals(vertices, triangles):
+    """
+    vertices: (n, 3)
+    triangles: (m, 3)
+    """
+    v0 = vertices[triangles[:, 0]]
+    v1 = vertices[triangles[:, 1]]
+    v2 = vertices[triangles[:, 2]]
+    normals = np.cross(v1 - v0, v2 - v0)
+    normals = normals / np.linalg.norm(normals, axis=1, keepdims=True)
+    return normals
+
+
+class MeshObj:
+    def __init__(self, mesh_path):
+        mesh = meshio.read(mesh_path)
+        self.vertices = mesh.points
+        self.triangles = mesh.cells_dict["triangle"]
+        self.triangles_normal = update_normals(self.vertices, self.triangles)
+        self.triangles_center = self.vertices[self.triangles].mean(axis=1)
+        self.bbox_min = self.vertices.min(axis=0)
+        self.bbox_max = self.vertices.max(axis=0)
+        self.center = (self.bbox_max + self.bbox_min) / 2
+        self.size = (self.bbox_max - self.bbox_min).max()
+
+    def spherical_surface_points(self, scale=2):
+        points = unit_sphere_surface_points(32)
+        points = points.reshape(-1, 3)
+        points = points * self.size * scale + self.center
+        points = torch.tensor(points).float().cuda()
+        return points
+
+
+class ModalSoundObj:
     def __init__(self, mesh_path):
         (
             self.vertices,

@@ -148,65 +148,97 @@ def plot_point_cloud(
     triangles,
     coords,
     data=None,
-    point_size=2,
+    point_size=5,
     mesh_opacity=0.2,
     cmin=None,
     cmax=None,
     zoom=1.0,
+    background_grid=True,
 ):
     """
     coords: (N, 3)
-    data: (N)
+    data: (N, K)
     """
     if data is None:
-        data = np.ones(len(coords))
-    else:
-        data = data.reshape(-1)
+        data = np.ones(len(coords)).reshape(-1, 1)
+    if len(data.shape) == 1:
+        data = data.reshape(-1, 1)
+
     vertices, triangles, coords, data = [
         torch_to_numpy(x) for x in [vertices, triangles, coords, data]
     ]
-    scatter = go.Scatter3d(
-        x=coords[:, 0],
-        y=coords[:, 1],
-        z=coords[:, 2],
-        mode="markers",
-        marker=dict(
-            size=point_size,
-            color=data,
-            colorscale="Viridis",  # choose a colorscale
-            opacity=1.0,
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Mesh3d(
+            x=vertices[:, 0],
+            y=vertices[:, 1],
+            z=vertices[:, 2],
+            i=triangles[:, 0],
+            j=triangles[:, 1],
+            k=triangles[:, 2],
+            opacity=mesh_opacity,
             cmin=cmin,
             cmax=cmax,
-            colorbar=dict(title=""),
-        ),
+            visible=True,  # Mesh is always visible
+            name="",  # Don't show legend for mesh
+        )
     )
 
-    x = vertices[:, 0]
-    y = vertices[:, 1]
-    z = vertices[:, 2]
+    # Add traces, one for each slider step
+    for i in range(data.shape[1]):
+        fig.add_trace(
+            go.Scatter3d(
+                x=coords[:, 0],
+                y=coords[:, 1],
+                z=coords[:, 2],
+                mode="markers",
+                marker=dict(
+                    size=point_size,
+                    color=data[:, i],
+                    colorscale="Viridis",  # choose a colorscale
+                    opacity=1.0,
+                    cmin=cmin,
+                    cmax=cmax,
+                    colorbar=dict(title=""),
+                ),
+                visible=False,
+                name="",  # Don't show legend for mesh
+            )
+        )
 
-    mesh = go.Mesh3d(
-        x=x,
-        y=y,
-        z=z,
-        i=triangles[:, 0],
-        j=triangles[:, 1],
-        k=triangles[:, 2],
-        colorscale="Viridis",
-        opacity=mesh_opacity,
-        # lighting=dict(ambient=1.0, diffuse=1.0, specular=1.0, fresnel=0.0),  # 关闭光照效果
-    )
-    fig = go.Figure(data=[mesh, scatter])
-    # fig.update_layout(
-    #     {
-    #         "scene": {
-    #             "xaxis": {"visible": False},
-    #             "yaxis": {"visible": False},
-    #             "zaxis": {"visible": False},
-    #         },
-    #         "scene_aspectmode": "data",
-    #     }
-    # )
+    fig.data[1].visible = True
+
+    # Create and add slider
+    steps = []
+    for i in range(1, len(fig.data)):  # Skip the first trace (mesh)
+        step = dict(
+            method="update",
+            args=[
+                {
+                    "visible": [True] + [False] * (len(fig.data) - 1)
+                },  # Keep mesh always visible
+                {"title": "Switched to feature: " + str(i)},
+            ],
+        )
+        step["args"][0]["visible"][i] = True  # Make corresponding plane trace visible
+        steps.append(step)
+
+    sliders = [
+        dict(active=0, currentvalue={"prefix": "Feature: "}, pad={"t": 50}, steps=steps)
+    ]
+    fig.update_layout(sliders=sliders)
+    if not background_grid:
+        fig.update_layout(
+            {
+                "scene": {
+                    "xaxis": {"visible": False},
+                    "yaxis": {"visible": False},
+                    "zaxis": {"visible": False},
+                },
+                "scene_aspectmode": "data",
+            }
+        )
     fig.update_layout(
         scene_camera=dict(
             eye=dict(x=0, y=0.5 * zoom, z=1.5 * zoom), up=dict(x=0, y=1, z=0)
@@ -393,3 +425,83 @@ def plot_mesh_with_plane(
     fig.update_layout(sliders=sliders)
 
     return fig
+
+
+class CombinedFig:
+    def __init__(self):
+        self.fig = go.Figure()
+
+    def add_mesh(self, vertices, triangles, data=None, opacity=0.2):
+        vertices, triangles, data = [
+            torch_to_numpy(x) for x in [vertices, triangles, data]
+        ]
+        # Add traces, one for each slider step
+        if data is None:
+            self.fig.add_trace(
+                go.Mesh3d(
+                    x=vertices[:, 0],
+                    y=vertices[:, 1],
+                    z=vertices[:, 2],
+                    i=triangles[:, 0],
+                    j=triangles[:, 1],
+                    k=triangles[:, 2],
+                    opacity=opacity,
+                    visible=True,  # Mesh is always visible
+                    name="",  # Don't show legend for mesh
+                    showlegend=False,
+                    showscale=False,
+                )
+            )
+        else:
+            self.fig.add_trace(
+                go.Mesh3d(
+                    x=vertices[:, 0],
+                    y=vertices[:, 1],
+                    z=vertices[:, 2],
+                    i=triangles[:, 0],
+                    j=triangles[:, 1],
+                    k=triangles[:, 2],
+                    colorscale="Viridis",
+                    intensity=data,
+                    intensitymode="cell"
+                    if data.shape[0] == triangles.shape[0]
+                    else "vertex",
+                    name="",
+                    opacity=opacity,
+                )
+            )
+        return self
+
+    def add_points(self, coords, data=None, point_size=5, showscale=True):
+        if data is None:
+            data = np.ones(len(coords))
+        else:
+            data = data.reshape(-1)
+
+        coords, data = [torch_to_numpy(x) for x in [coords, data]]
+        coords = coords.reshape(-1, 3)
+        cmax = data.max()
+        cmin = data.min()
+        print("cmin = ", cmin, "cmax = ", cmax)
+        self.fig.add_trace(
+            go.Scatter3d(
+                x=coords[:, 0],
+                y=coords[:, 1],
+                z=coords[:, 2],
+                mode="markers",
+                marker=dict(
+                    size=point_size,
+                    color=data,
+                    colorscale="Viridis",  # choose a colorscale
+                    opacity=1.0,
+                    cmax=cmax,
+                    cmin=cmin,
+                    colorbar=dict(title="") if showscale else None,
+                ),
+                name="",
+            )
+        )
+        return self
+
+    def show(self):
+        self.fig.show()

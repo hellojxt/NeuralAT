@@ -9,7 +9,12 @@ from src.cuda_imp import (
     FDTDSimulator,
     get_bound_info,
 )
-from src.loader.model import ModalSoundObject, SoundObjList, SimpleSoundObject, BEMModel
+from src.kleinpat_loader.model import (
+    ModalSoundObject,
+    SoundObjList,
+    SimpleSoundObject,
+    BEMModel,
+)
 import numpy as np
 from src.visualize import plot_mesh, plot_mesh_with_plane
 from src.solver import BiCGSTAB

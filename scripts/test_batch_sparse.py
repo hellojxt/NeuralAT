@@ -10,7 +10,7 @@ from src.cuda_imp import (
     fast_sparse_matrix_vector_mul2,
 )
 from src.timer import Timer
-from src.loader.model import ModalSoundObject
+from src.kleinpat_loader.model import ModalSoundObject
 
 
 obj_id = 2

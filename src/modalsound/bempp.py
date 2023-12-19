@@ -7,8 +7,8 @@ import torch
 
 # warnings.filterwarnings("ignore")
 bempp.api.enable_console_logging("debug")
-# bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
-# bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
+bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"
+bempp.api.POTENTIAL_OPERATOR_DEVICE_TYPE = "gpu"
 
 
 def obj_to_grid(vertices, elements):
@@ -50,6 +50,8 @@ class BEMModel:
         self.dirichlet_fun = dirichlet_fun
 
     def boundary_equation_solve(self, neumann_coeff, tol=1e-6, maxiter=2000):
+        if isinstance(neumann_coeff, torch.Tensor):
+            neumann_coeff = neumann_coeff.detach().cpu().numpy()
         neumann_fun = GridFunction(
             self.dp0_space, coefficients=np.asarray(neumann_coeff)
         )

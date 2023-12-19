@@ -4,7 +4,7 @@ sys.path.append("./")
 
 import torch
 from src.cuda_imp import ImportanceSampler, MonteCarloWeight
-from src.loader.model import ModalSoundObject
+from src.kleinpat_loader.model import ModalSoundObject
 import numpy as np
 from src.visualize import plot_mesh, plot_point_cloud
 from src.solver import BiCGSTAB

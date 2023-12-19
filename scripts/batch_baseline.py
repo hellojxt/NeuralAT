@@ -4,7 +4,6 @@ sys.path.append("./")
 
 import torch
 from src.cuda_imp import ImportanceSampler, MonteCarloWeight
-from src.loader.model import ModalSoundObject
 from src.timer import Timer
 import numpy as np
 from src.visualize import plot_mesh, plot_point_cloud, crop_center, combine_images
@@ -21,7 +20,7 @@ def run(warm_up=False):
     timer = Timer(warm_up == False)
     sampler = ImportanceSampler(vertices, triangles, importance, 100000)
     sampler.update()
-    sampler.poisson_disk_resample(0.009, 4)
+    sampler.poisson_disk_resample(0.004, 4)
     timer.log("sample points: ", sampler.num_samples)
 
     G0_constructor = MonteCarloWeight(sampler.points, sampler)
@@ -31,7 +30,9 @@ def run(warm_up=False):
 
     neumann = (
         triangle_neumanns[sampler.points_index].to(torch.complex64).T.unsqueeze(-1)
-    )  # (batch_size, n, 1)
+    )
+    print(neumann.shape)
+    # (batch_size, n, 1)
     b_batch = torch.bmm(G0_batch, neumann).permute(1, 2, 0)
     timer.log("construct G and b", record=True)
     solver = BiCGSTAB_batch(
@@ -39,16 +40,21 @@ def run(warm_up=False):
     )
     timer.log("construct A", record=True)
 
-    dirichlet = solver.solve(b_batch, tol=0.001, nsteps=20)
+    dirichlet = solver.solve(b_batch, tol=1e-6, nsteps=2000)
     timer.log("solve", record=True)
+    plot_point_cloud(
+        vertices, triangles, sampler.points, neumann[0].real, point_size
+    ).show()
+    plot_point_cloud(
+        vertices, triangles, sampler.points, dirichlet[:, :, 0].real, point_size
+    ).show()
+    plot_point_cloud(vertices, triangles, vertices, gts[0].real, point_size).show()
     if not warm_up and LOG_IMAGE:
         image_paths_full = []
         zoom = 2.0
         crop_width = 300
         crop_height = 150
-        plot_point_cloud(
-            vertices, triangles, sampler.points, dirichlet[:, :, 0].real, point_size
-        ).show()
+
         for mode_idx in range(batch_size):
             data = dirichlet[:, :, mode_idx]
             gt = gts[mode_idx]
@@ -93,55 +99,18 @@ def run(warm_up=False):
     return timer.record_time
 
 
-def generate_data(prefix_idx=0):
-    triangle_neumanns = []
-    ks = []
-    gts = []
-    for i in range(batch_size):
-        mode_idx = prefix_idx + i
-        triangle_neumann = torch.tensor(
-            sound_object.get_triangle_neumann(mode_idx), dtype=torch.float32
-        ).cuda()
-        k = sound_object.get_wave_number(mode_idx)
-        (
-            gt_real,
-            gt_image,
-            gt_error,
-            gt_cost_time,
-        ) = sound_object.get_vertex_dirichlet(mode_idx)
-        gt_real, gt_image = map(torch.tensor, (gt_real, gt_image))
-        gt_real = gt_real.cuda()
-        gt_image = gt_image.cuda()
-        gt = torch.stack([gt_real, gt_image], dim=1).squeeze(-1)
-        gt = torch.view_as_complex(gt)
-        triangle_neumanns.append(triangle_neumann)
-        ks.append(k)
-        gts.append(gt)
-    return triangle_neumanns, ks, gts
+point_size = 5
+data_path = sys.argv[1]
+data = np.load(data_path)
+vertices = torch.tensor(data["vertices"], dtype=torch.float32).cuda()
+triangles = torch.tensor(data["triangles"], dtype=torch.int32).cuda()
 
+batch_size = 16
+triangle_neumanns = torch.tensor(data["neumann"], dtype=torch.float32).cuda()
+ks = torch.tensor(data["wave_number"], dtype=torch.float32).cuda()
+gts = data["dirichlet"].T
 
-obj_id = 2
-point_size = 4
-sound_object = ModalSoundObject(f"dataset/0000{obj_id}")
-vertices = torch.tensor(sound_object.vertices, dtype=torch.float32).cuda()
-triangles = torch.tensor(sound_object.triangles, dtype=torch.int32).cuda()
-
-batch_size = 32
-triangle_neumanns, ks, gts = generate_data()
-triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
 LOG_IMAGE = False
 run(warm_up=True)
-LOG_IMAGE = True
-time_parallel = run(warm_up=False)
-LOG_IMAGE = False
-
-batch_size = 1
-time_serial = 0
-for i in range(32):
-    triangle_neumanns, ks, gts = generate_data(i)
-    triangle_neumanns = torch.stack(triangle_neumanns, dim=1)
-    run(warm_up=True)
-    time_serial += run(warm_up=False)
-
-print(f"parallel: {time_parallel}")
-print(f"serial: {time_serial}")
+# LOG_IMAGE = True
+# run(warm_up=False)

@@ -164,9 +164,9 @@ class BiCGSTAB_batch:
         s = self.r - self.alpha * self.v  # s <- r_{i-1} - alpha v_i
         t = self.Ax_gen(s)  # t <- As
         self.omega = self.batch_dot(t, s) / self.batch_dot(t, t)
-        self.x = (
-            self.x + self.alpha * self.p + self.omega * s
-        )  # x_i <- x_{i-1} + alpha p + w_i s
+        tmp_x = self.x + self.alpha * self.p + self.omega * s
+        mask = torch.isnan(tmp_x) == False
+        self.x[mask] = tmp_x[mask]  # x_i <- x_{i-1} + alpha p + w_i s
         status, res = self.check_convergence(self.x)
         if status:
             return True

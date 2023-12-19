@@ -8,7 +8,7 @@ from src.cuda_imp import (
     MonteCarloWeight,
     fast_sparse_matrix_vector_mul,
 )
-from src.loader.model import ModalSoundObject
+from src.kleinpat_loader.model import ModalSoundObject
 from src.timer import Timer
 import numpy as np
 from src.visualize import plot_mesh, plot_point_cloud, crop_center, combine_images

@@ -6,6 +6,7 @@
 #include "gpu_memory.h"
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#include <thrust/remove.h>
 using namespace nwob;
 class CellPoint
 {

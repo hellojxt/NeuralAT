@@ -135,6 +135,7 @@ class BiCGSTAB_batch:
     def check_convergence(self, x):
         r = self.b - self.Ax_gen(x)
         rdotr = self.batch_vdot(r, r)
+        self.rdotr = rdotr
         if (rdotr < self.residual_tol).all() or (rdotr < self.atol).all():
             return True, r
         else:
@@ -187,7 +188,7 @@ class BiCGSTAB_batch:
         iter_count = 0
         while self.nsteps:
             s = self.step()
-            # print(self.x)
+            print("step", iter_count, "with residual", self.rdotr)
             iter_count += 1
             if s:
                 print(f"Converged in {iter_count} steps")
@@ -276,6 +277,7 @@ class BiCGSTAB_batch2:
         iter_count = 0
         while self.nsteps:
             s = self.step()
+            print("step", iter_count, "with residual", self.rdotr)
             # print(self.x)
             iter_count += 1
             if s:

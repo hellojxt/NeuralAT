@@ -68,9 +68,16 @@ def update_normals(vertices, triangles):
 
 
 class MeshObj:
-    def __init__(self, mesh_path):
+    def __init__(self, mesh_path, scale=0.15):
         mesh = meshio.read(mesh_path)
         self.vertices = mesh.points
+        bbox_min = self.vertices.min(axis=0)
+        bbox_max = self.vertices.max(axis=0)
+        self.vertices = (
+            (self.vertices - (bbox_max + bbox_min) / 2)
+            / (bbox_max - bbox_min).max()
+            * scale
+        )
         self.triangles = mesh.cells_dict["triangle"]
         self.triangles_normal = update_normals(self.vertices, self.triangles)
         self.triangles_center = self.vertices[self.triangles].mean(axis=1)

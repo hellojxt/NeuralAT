@@ -29,7 +29,7 @@ class AcousticDataset(Dataset):
     SUFFIX = ""
 
     def __init__(self, root_dir, phase):
-        self.file_list = glob(f"{root_dir}/*.npz")
+        self.file_list = glob(f"{root_dir}/*/voxel.npz")
         data = np.load(self.file_list[0])
         freqs = data["freqs"]
         freq_num = len(freqs)
@@ -50,6 +50,7 @@ class AcousticDataset(Dataset):
             data["surface"],
             data["freqs"],
         )
+        feats_in = feats_in.real
         # print('feats_out' + self.SUFFIX)
         # Random selection
         freq = freqs[mode_idx]

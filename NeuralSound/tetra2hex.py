@@ -11,39 +11,32 @@ from classic.voxelize.hexahedral import Hexa_model
 from classic.fem.util import to_sparse_coords
 from classic.bem.util import boundary_encode, boundary_voxel
 from src.visualize import plot_point_cloud
+from src.modalsound.model import MeshObj
 from scipy.spatial import KDTree
 
-root_dir = "dataset/ABC"
+freqs = [20, 200, 2000, 20, 200, 2000]
 
-eigen_dir = os.path.join(root_dir, "data/eigen")
+root_dir = sys.argv[1]
+obj_dir = glob(f"{root_dir}/*")
+for obj_path in obj_dir:
+    mesh = MeshObj(obj_path + "/mesh.obj")
+    data = np.load(obj_path + "/bem.npz")
+    points = mesh.triangles_center
+    normals = mesh.triangles_normal
+    neumann = data["neumann"].reshape(-1, len(points)).T
+    neumann = neumann.reshape(len(points), 1, -1)
+    normals = normals.reshape(len(points), 3, 1)
+    neumann = neumann * normals
 
-eigen_list = glob(os.path.join(eigen_dir, "*.npz"))
-
-for eigen_path in tqdm(eigen_list):
-    out_path = eigen_path.replace("eigen", "acoustic")
-    if os.path.exists(out_path):
-        continue
-    out_dir = os.path.dirname(out_path)
-    os.makedirs(out_dir, exist_ok=True)
-    data = np.load(eigen_path)
-    vertices, triangles = data["vertices"], data["triangles"]
-    wave_number = data["wave_number"]
-    modes = data["modes"]
-    freqs = wave_number * 343.2 / (2 * np.pi)
-    hexa = Hexa_model(vertices / 0.15, triangles, res=32)
+    hexa = Hexa_model(mesh.vertices, mesh.triangles, res=32)
     hexa.fill_shell()
     voxel = hexa.voxel_grid
     coords = to_sparse_coords(voxel).astype(np.float32)
     coords = ((coords + 0.5) / 32 - 0.5) * 0.15
 
-    kd_tree = KDTree(vertices)
+    kd_tree = KDTree(points)
     _, idx = kd_tree.query(coords)
-    vecs = modes[idx]
-
-    # vertex_feats = modes[:, 0, 0]
-    # plot_point_cloud(vertices, triangles, vertices, vertex_feats).show()
-    # voxel_feats = vecs[:, 0, 0]
-    # plot_point_cloud(vertices, triangles, coords, voxel_feats).show()
+    vecs = neumann[idx]
 
     coords = to_sparse_coords(voxel)
     coords_surface, feats_index = map(np.asarray, boundary_voxel(coords))
@@ -54,7 +47,7 @@ for eigen_path in tqdm(eigen_list):
         (mode_num, 2 * image_size, image_size)
     )
     np.savez_compressed(
-        out_path,
+        obj_path + "/voxel.npz",
         coords=coords_surface,
         feats_in=vecs[feats_index],
         feats_out=ffat_map,

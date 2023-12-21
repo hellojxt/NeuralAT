@@ -36,6 +36,7 @@ def forward_fun(items):
     bcoords, feats_in, feats_in_norm, feats_out, feats_out_norm, filename = items
     torch.cuda.synchronize()
     start_time = time()
+    print(filename[0])
     ffat_map, ffat_norm = Config.net(bcoords, feats_in)
     ffat_norm = (ffat_norm * 3 - 8).exp()
     # feats_out_norm = (np.log(feats_out_norm) + 8) / 3
@@ -47,7 +48,7 @@ def forward_fun(items):
         * ffat_norm.unsqueeze(-1).unsqueeze(-1)
         * feats_in_norm.unsqueeze(-1).unsqueeze(-1)
     )
-    out_path = filename[0].replace("acoustic", "NeuralSound")
+    out_path = filename[0].replace("voxel", "NeuralSound")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     np.savez_compressed(
         out_path,
@@ -94,7 +95,7 @@ if __name__ == "__main__":
     Config.scheduler = optim.lr_scheduler.StepLR(
         Config.optimizer, step_size=8, gamma=0.8
     )
-    Config.BATCH_SIZE = 16
+    Config.BATCH_SIZE = 6
     Config.dataset_worker_num = 8
     Config.weights_dir = args.wdir
     Config.load_weights = True

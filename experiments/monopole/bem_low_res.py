@@ -26,7 +26,7 @@ data_dir = sys.argv[1]
 
 config = configparser.ConfigParser()
 config.read(f"{data_dir}/config.ini")
-obj = MeshObj(f"{data_dir}/mesh.obj")
+obj = MeshObj(f"{data_dir}/mesh_low_res.obj")
 obj.center[0] += config.getfloat("mesh", "offset_x")
 obj.center[1] += config.getfloat("mesh", "offset_y")
 obj.center[2] += config.getfloat("mesh", "offset_z")
@@ -80,12 +80,7 @@ for i, M in enumerate(Ms):
         # ).show()
 
 np.savez_compressed(
-    f"{data_dir}/gt.npz",
-    ffat_map=ffat_map_gt,
-)
-
-np.savez_compressed(
-    f"{data_dir}/bem.npz",
+    f"{data_dir}/bem_low_res.npz",
     ffat_map=ffat_map_bem,
     cost_time=cost_time,
     neumann=neumann,

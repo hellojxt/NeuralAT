@@ -1,7 +1,6 @@
 import numpy as np
 from OpenGL.GL import *
 import meshio
-import torch
 
 
 def update_normals(vertices, triangles):
@@ -17,13 +16,12 @@ def update_normals(vertices, triangles):
     return normals
 
 
-def load_obj(path, normalize=True):
+def load_obj(path, scale=1.0):
     mesh = meshio.read(path)
     vertices = mesh.points
     triangles = mesh.cells_dict["triangle"]
-    if normalize:
-        vertices = vertices - np.mean(vertices, axis=0, keepdims=True)
-        vertices = vertices / np.max(np.abs(vertices))
+    vertices = vertices - np.mean(vertices, axis=0, keepdims=True)
+    vertices = vertices / np.max(np.abs(vertices)) * scale
     normals = update_normals(vertices, triangles)
     vertex_normals = np.zeros_like(vertices)
     for i in range(triangles.shape[0]):
@@ -41,41 +39,31 @@ def load_obj(path, normalize=True):
 
 
 class Mesh:
-    def __init__(self, vertices, indices, program):
+    def __init__(self, vertices, indices, program, camera):
         # Assuming each vertex entry in 'vertices' now includes position and texture coordinates and normal
         # e.g., [x, y, z, u, v, nx, ny, nz]
         self.vertices = np.array(vertices, dtype=np.float32)
         self.indices = np.array(indices, dtype=np.uint32)
-        self.VAO = None
-        self.VBO = None
-        self.EBO = None
-        self.texture = None  # Handle for the texture
-        self.setup_mesh()
+        self.gl_data = self.vertices[self.indices].reshape(-1)
         self.program = program
+        self.camera = camera
+        self.init_gl()
+        self.displacement = [0.0, 0.0, 0.0]
 
-    def setup_mesh(self):
+    def init_gl(self):
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
 
-        self.VBO = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
-        glBufferData(
-            GL_ARRAY_BUFFER, self.vertices.nbytes, self.vertices, GL_STATIC_DRAW
-        )
-
-        self.EBO = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        glBufferData(
-            GL_ELEMENT_ARRAY_BUFFER, self.indices.nbytes, self.indices, GL_STATIC_DRAW
-        )
-
-        # Position attribute
+        self.PBO = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
+        glBufferData(GL_ARRAY_BUFFER, self.gl_data, GL_STATIC_DRAW)
+        # # Position attribute
+        glEnableVertexAttribArray(0)
         glVertexAttribPointer(
             0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), ctypes.c_void_p(0)
         )
-        glEnableVertexAttribArray(0)
-
         # Texture coordinate attribute
+        glEnableVertexAttribArray(1)
         glVertexAttribPointer(
             1,
             2,
@@ -84,9 +72,9 @@ class Mesh:
             8 * sizeof(GLfloat),
             ctypes.c_void_p(3 * sizeof(GLfloat)),
         )
-        glEnableVertexAttribArray(1)
 
         # Normal attribute
+        glEnableVertexAttribArray(2)
         glVertexAttribPointer(
             2,
             3,
@@ -95,7 +83,6 @@ class Mesh:
             8 * sizeof(GLfloat),
             ctypes.c_void_p(5 * sizeof(GLfloat)),
         )
-        glEnableVertexAttribArray(2)
 
         # create texture
         self.texture = glGenTextures(1)
@@ -107,20 +94,29 @@ class Mesh:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
+        glBindVertexArray(0)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
     def render(self):
-        # Set texture uniform location (ideally done once after shader program is linked)
+        glUseProgram(self.program)
         texture_loc = glGetUniformLocation(self.program, "texture_diffuse")
         glUniform1i(texture_loc, 0)
-
-        # Activate texture and bind it
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texture)
-
-        # Bind VAO and draw
+        displacement_loc = glGetUniformLocation(self.program, "displacement")
+        glUniform3fv(displacement_loc, 1, self.displacement)
+        self.camera.update_uniform(self.program)
         glBindVertexArray(self.VAO)
-        glDrawElements(GL_TRIANGLES, len(self.indices) * 3, GL_UNSIGNED_INT, None)
+        glBindBuffer(GL_ARRAY_BUFFER, self.PBO)
+        glDrawArrays(GL_TRIANGLES, 0, 3 * len(self.indices))
+        glBindVertexArray(0)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        glUseProgram(0)
 
-    def set_cpu_texture(self, img: np.ndarray):
+    def set_texture(self, img: np.ndarray):
+        glBindTexture(GL_TEXTURE_2D, self.texture)
         glTexImage2D(
             GL_TEXTURE_2D,
             0,
@@ -132,15 +128,16 @@ class Mesh:
             GL_FLOAT,
             None,
         )
-        self.update_cpu_texture(img)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        self.update_texture(img)
 
-    def update_cpu_texture(self, img: np.ndarray):
+    def update_texture(self, img: np.ndarray):
         glBindTexture(GL_TEXTURE_2D, self.texture)
         glTexSubImage2D(
             GL_TEXTURE_2D, 0, 0, 0, img.shape[0], img.shape[1], GL_RGB, GL_FLOAT, img
         )
+        glBindTexture(GL_TEXTURE_2D, 0)
 
     def __del__(self):
         glDeleteVertexArrays(1, [self.VAO])
-        glDeleteBuffers(1, [self.VBO])
-        glDeleteBuffers(1, [self.EBO])
+        glDeleteBuffers(1, [self.PBO])

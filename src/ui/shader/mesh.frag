@@ -15,7 +15,7 @@ uniform vec3 viewPos; // Position of the camera/viewer
 void main()
 {
     // Ambient Lighting
-    float ambientStrength = 0.1; // You can adjust this value
+    float ambientStrength = 0.5; // You can adjust this value
     vec3 ambient = ambientStrength * lightColor;
 
     // Diffuse Lighting
@@ -27,7 +27,7 @@ void main()
     float specularStrength = 0.5; // You can adjust this value
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32); // 32 is the shininess factor, can be adjusted
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16); // 16 is the shininess factor, can be adjusted
     vec3 specular = specularStrength * spec * lightColor;
 
     // Combine the texture color with the lighting components

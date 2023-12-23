@@ -33,21 +33,21 @@ def to_img(data1, data2, filename):
 
 
 def forward_fun(items):
-    bcoords, feats_in, feats_in_norm, feats_out, feats_out_norm, filename = items
     torch.cuda.synchronize()
     start_time = time()
+    bcoords, feats_in, feats_in_norm, feats_out, feats_out_norm, filename = items
     print(filename[0])
     ffat_map, ffat_norm = Config.net(bcoords, feats_in)
     ffat_norm = (ffat_norm * 3 - 8).exp()
-    # feats_out_norm = (np.log(feats_out_norm) + 8) / 3
-    # check_shape(bcoords, feats_in, freq_norm, feats_out, feats_out_norm,ffat_map, ffat_norm)
-    torch.cuda.synchronize()
     cost_time = time() - start_time
     ffat_map = (
         ffat_map
         * ffat_norm.unsqueeze(-1).unsqueeze(-1)
         * feats_in_norm.unsqueeze(-1).unsqueeze(-1)
     )
+    # feats_out_norm = (np.log(feats_out_norm) + 8) / 3
+    # check_shape(bcoords, feats_in, freq_norm, feats_out, feats_out_norm,ffat_map, ffat_norm)
+    torch.cuda.synchronize()
     out_path = filename[0].replace("voxel", "NeuralSound")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     np.savez_compressed(
@@ -95,9 +95,14 @@ if __name__ == "__main__":
     Config.scheduler = optim.lr_scheduler.StepLR(
         Config.optimizer, step_size=8, gamma=0.8
     )
-    Config.BATCH_SIZE = 6
+    from glob import glob
+
+    data_dir_list = glob(args.dataset + "/*")
+    sample_data = np.load(data_dir_list[0] + "/voxel.npz")
+    mode_num = len(sample_data["freqs"])
+    Config.BATCH_SIZE = mode_num
     Config.dataset_worker_num = 8
     Config.weights_dir = args.wdir
     Config.load_weights = True
     Config.only_test = True
-    start_train(1)
+    start_train(2)

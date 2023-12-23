@@ -503,5 +503,15 @@ class CombinedFig:
         )
         return self
 
-    def show(self):
+    def show(self, grid=True):
+        self.fig.update_layout(
+            {
+                "scene": {
+                    "xaxis": {"visible": grid},
+                    "yaxis": {"visible": grid},
+                    "zaxis": {"visible": grid},
+                },
+                "scene_aspectmode": "data",
+            }
+        )
         self.fig.show()

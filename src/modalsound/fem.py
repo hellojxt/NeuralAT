@@ -24,6 +24,7 @@ class MatSet:
     Ceramic = 2700, 7.2e10, 0.19, 6, 1e-7
     Glass = 2600, 6.2e10, 0.20, 1, 1e-7
     Wood = 750, 1.1e10, 0.25, 60, 2e-6
+    CustomPlastic = 1070, 1.4e8, 0.35, 30, 1e-6
     Plastic = 1070, 1.4e9, 0.35, 30, 1e-6
     Iron = 8000, 2.1e11, 0.28, 5, 1e-7
     Polycarbonate = 1190, 2.4e9, 0.37, 0.5, 4e-7

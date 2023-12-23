@@ -28,17 +28,20 @@ for obj_path in obj_dir:
 
     bem_time = bem_data["cost_time"]
     ours_time = ours_data["cost_time"]
-    NeuralSound_time = NeuralSound_data["cost_time"]
+    NeuralSound_time = (
+        NeuralSound_data["cost_time"] + np.load(obj_path + "/voxel.npz")["cost_time"]
+    )
+    print(NeuralSound_data["cost_time"], np.load(obj_path + "/voxel.npz")["cost_time"])
 
     for i in range(6):
         print(
-            f"{obj_path.split('/')[-1]}_{i}: SNR: {SNR(gt_ffat[i], bem_ffat[i])}, time: {bem_time}"
+            f"{obj_path.split('/')[-1]}_{i}: bem SNR: {SNR(gt_ffat[i], bem_ffat[i])}, time: {bem_time}"
         )
         print(
-            f"{obj_path.split('/')[-1]}_{i}: SNR: {SNR(gt_ffat[i], ours_ffat[i])}, time: {ours_time}"
+            f"{obj_path.split('/')[-1]}_{i}: ours SNR: {SNR(gt_ffat[i], ours_ffat[i])}, time: {ours_time}"
         )
         print(
-            f"{obj_path.split('/')[-1]}_{i}: SNR: {SNR(gt_ffat[i], NeuralSound_ffat[i])}, time: {NeuralSound_time}"
+            f"{obj_path.split('/')[-1]}_{i}: NeuralSound SNR: {SNR(gt_ffat[i], NeuralSound_ffat[i])}, time: {NeuralSound_time}"
         )
 
     # for i in range(3, 6):

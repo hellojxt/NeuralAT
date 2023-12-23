@@ -11,10 +11,22 @@ from numba import njit
 
 
 def SNR(ground_truth, prediction):
+    ground_truth = np.abs(ground_truth)
+    prediction = np.abs(prediction)
     return 10 * np.log10(
-        np.abs(np.sum(ground_truth**2))
-        / np.abs(np.sum((ground_truth - prediction) ** 2))
+        (ground_truth**2).mean() / ((ground_truth - prediction) ** 2).mean()
     )
+
+
+from skimage.metrics import structural_similarity as ssim
+
+
+def complex_ssim(x, y):
+    x = np.abs(x)
+    y = np.abs(y)
+    max_val = max(x.max(), y.max())
+    min_val = min(x.min(), y.min())
+    return ssim(x, y, data_range=max_val - min_val)
 
 
 class MultipoleModel:
@@ -67,6 +79,26 @@ def update_normals(vertices, triangles):
     return normals
 
 
+def get_mesh_center(vertices):
+    bbox_min = vertices.min(axis=0)
+    bbox_max = vertices.max(axis=0)
+    return (bbox_max + bbox_min) / 2
+
+
+def get_mesh_size(vertices):
+    bbox_min = vertices.min(axis=0)
+    bbox_max = vertices.max(axis=0)
+    return (bbox_max - bbox_min).max()
+
+
+def get_spherical_surface_points(vertices, scale=2):
+    points = unit_sphere_surface_points(32)
+    points = points.reshape(-1, 3)
+    points = points * get_mesh_size(vertices) * scale + get_mesh_center(vertices)
+    points = torch.tensor(points).float().cuda()
+    return points
+
+
 class MeshObj:
     def __init__(self, mesh_path, scale=0.15):
         mesh = meshio.read(mesh_path)
@@ -108,6 +140,13 @@ class ModalSoundObj:
             self.surf_vertices, self.surf_triangles
         )
 
+    def spherical_surface_points(self, scale=2):
+        points = unit_sphere_surface_points(32)
+        points = points.reshape(-1, 3)
+        points = points * self.size * scale + self.center
+        points = torch.tensor(points).float().cuda()
+        return points
+
     def normalize(self, scale=1.0):
         self.vertices = (self.vertices - (self.bbox_max + self.bbox_min) / 2) / (
             self.bbox_max - self.bbox_min
@@ -120,6 +159,8 @@ class ModalSoundObj:
         self.surf_vertices = self.surf_vertices * scale
         self.bbox_min = self.vertices.min(axis=0)
         self.bbox_max = self.vertices.max(axis=0)
+        self.size = (self.bbox_max - self.bbox_min).max()
+        self.center = (self.bbox_max + self.bbox_min) / 2
 
     def modal_analysis(self, k=32, material=Material(MatSet.Plastic)):
         self.fem_model = FEMmodel(self.vertices, self.tets, material)

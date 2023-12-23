@@ -50,7 +50,6 @@ class AcousticDataset(Dataset):
             data["surface"],
             data["freqs"],
         )
-        feats_in = feats_in.real
         # print('feats_out' + self.SUFFIX)
         # Random selection
         freq = freqs[mode_idx]

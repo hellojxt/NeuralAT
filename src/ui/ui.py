@@ -21,7 +21,7 @@ class UI:
         self.program = create_program(shader)
         self.current = time.time()
         self.duration = 0
-        light_direction = [-0.2, -1.0, -0.3]
+        light_direction = [0.2, 1.0, 0.3]
         light_color = [1.0, 1.0, 1.0]
         self.camera = Camera(
             [5, 0, 5],

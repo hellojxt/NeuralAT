@@ -11,6 +11,7 @@ uniform vec3 displacement; // Displacement of the object
 
 out vec2 TexCoord;
 out vec3 Normal;
+out vec3 Normal_static;
 out vec3 FragPos;
 
 
@@ -24,7 +25,8 @@ void main()
 
     // Transform the normal vector to view space and pass it to the fragment shader
     Normal = mat3(transpose(inverse(view * model))) * aNormal;
+    Normal_static = mat3(transpose(inverse(model))) * aNormal;
 
     // Transform the vertex position to view space and pass it to the fragment shader
-    FragPos = vec3(view * model * vec4(aPos + displacement, 1.0));
+    FragPos = vec3(model * vec4(aPos + displacement, 1.0));
 }

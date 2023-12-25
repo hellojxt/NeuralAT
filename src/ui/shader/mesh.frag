@@ -2,6 +2,7 @@
 
 in vec2 TexCoord;
 in vec3 Normal;
+in vec3 Normal_static;
 in vec3 FragPos;
 
 out vec4 FragColor;
@@ -15,16 +16,20 @@ uniform vec3 viewPos; // Position of the camera/viewer
 void main()
 {
     // Ambient Lighting
-    float ambientStrength = 0.5; // You can adjust this value
+    float ambientStrength = 0.33; // You can adjust this value
     vec3 ambient = ambientStrength * lightColor;
 
     // Diffuse Lighting
     vec3 norm = normalize(Normal);
     float diff = max(dot(norm, normalize(lightDir)), 0.0);
-    vec3 diffuse = diff * lightColor;
+
+    vec3 norm_static = normalize(Normal_static);
+    float diff_static = max(dot(norm_static, normalize(lightDir)), 0.0);
+
+    vec3 diffuse = (diff_static*0.5 + diff*0.5) * lightColor * 0.33;
 
     // Specular Lighting
-    float specularStrength = 0.5; // You can adjust this value
+    float specularStrength = 0.33; // You can adjust this value
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16); // 16 is the shininess factor, can be adjusted

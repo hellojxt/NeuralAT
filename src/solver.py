@@ -191,7 +191,7 @@ class BiCGSTAB_batch:
             # print("step", iter_count, "with residual", self.rdotr)
             iter_count += 1
             if s:
-                print(f"Converged in {iter_count} steps")
+                # print(f"Converged in {iter_count} steps")
                 return self.x
             if (self.rho == 0).all():
                 break

@@ -117,7 +117,7 @@ print("src_sample_num:", src_sample_num)
 x = torch.zeros(src_sample_num, trg_sample_num, 10, dtype=torch.float32)
 y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
 
-for i in range(src_sample_num):
+for i in tqdm(range(src_sample_num)):
     while True:
         src_rot = sample_uniform_quaternion()
         points_vib_updated = rotate_points(points_vib, src_rot)

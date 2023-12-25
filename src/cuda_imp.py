@@ -150,6 +150,34 @@ class ImportanceSampler:
         return triangles_neumann[self.points_index].to(torch.complex64).reshape(-1, 1)
 
 
+def get_weights_potential_ks_base(
+    ks, trg_points, points, normals, importance, cdf, deriv
+):
+    ks = torch.as_tensor(ks, dtype=torch.float32, device=trg_points.device)
+    cuda_method_name = "get_monte_carlo_weight_potential_ks" + str(int(deriv))
+    return CUDA_MODULE.get(cuda_method_name)(
+        trg_points,
+        points,
+        normals,
+        importance,
+        ks,
+        cdf,
+    )
+
+
+def get_weights_boundary_ks_base(ks, points, normals, importance, cdf, deriv):
+    ks = torch.as_tensor(ks, dtype=torch.float32, device=points.device)
+    cuda_method_name = "get_monte_carlo_weight_boundary_ks" + str(int(deriv))
+    return CUDA_MODULE.get(cuda_method_name)(
+        points,
+        points,
+        normals,
+        importance,
+        ks,
+        cdf,
+    )
+
+
 class MonteCarloWeight:
     def __init__(self, trg_points, src_sample, k=None, deriv=False):
         self.src_sample = src_sample

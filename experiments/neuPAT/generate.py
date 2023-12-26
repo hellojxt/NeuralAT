@@ -118,6 +118,8 @@ x = torch.zeros(src_sample_num, trg_sample_num, 10, dtype=torch.float32)
 y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
 
 for i in tqdm(range(src_sample_num)):
+    trg_pos = torch.rand(trg_sample_num, 3, device="cuda", dtype=torch.float32)
+    trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
     while True:
         src_rot = sample_uniform_quaternion()
         points_vib_updated = rotate_points(points_vib, src_rot)
@@ -125,13 +127,13 @@ for i in tqdm(range(src_sample_num)):
         src_pos = torch.rand(3, device="cuda", dtype=torch.float32)
         displacement = src_pos * (src_pos_max - src_pos_min) + src_pos_min
         points_vib_updated = points_vib_updated + displacement
-        if points_vib_updated[:, 1].min() > 0.01:
+        if points_vib_updated[:, 1].min() > 0.005:
+            trg_points = rotate_points(trg_points, src_rot)
+            trg_points = trg_points + displacement
             break
+
     points = torch.cat([points_vib_updated, points_static], dim=0)
     normals = torch.cat([normal_vib_updated, normal_static], dim=0)
-
-    trg_pos = torch.rand(trg_sample_num, 3, device="cuda", dtype=torch.float32)
-    trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
 
     ffat_map = torch.zeros(mode_num, trg_sample_num, 1, dtype=torch.complex64).cuda()
     idx = 0
@@ -163,9 +165,11 @@ for i in tqdm(range(src_sample_num)):
         ffat_map[idx : idx + batch_step] = G1 @ dirichlet_batch - G0 @ neumann_batch
 
         idx += batch_step
-
     ffat_map = ffat_map.abs().squeeze(-1)
 
+    # CombinedFig().add_points(points, neumann[63].real).add_points(
+    #     trg_points, ffat_map[63].real
+    # ).show()
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()
     x[i, :, 6:10] = src_rot.cpu()

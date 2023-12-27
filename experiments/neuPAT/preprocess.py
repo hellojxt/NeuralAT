@@ -21,7 +21,7 @@ import configparser
 import meshio
 import torch
 
-data_dir = sys.argv[1]
+data_dir = "dataset/NeuPAT/bowl"
 
 import json
 
@@ -58,13 +58,13 @@ def precompute_sample_points():
     sampler_vib.poisson_disk_resample(radius, 8)
     print("vibration points:", sampler_vib.num_samples)
 
-    neumann = np.zeros((mode_num, len(triangles_vib)), dtype=np.complex64)
+    neumann_vib_tri = np.zeros((mode_num, len(triangles_vib)), dtype=np.complex64)
     wave_number = []
     for i in range(mode_num):
-        neumann[i] = obj_vib.get_triangle_neumann(i)
+        neumann_vib_tri[i] = obj_vib.get_triangle_neumann(i)
         wave_number.append(obj_vib.get_wave_number(i))
 
-    neumann_vib = torch.from_numpy(neumann).unsqueeze(-1).cuda()
+    neumann_vib = torch.from_numpy(neumann_vib_tri).unsqueeze(-1).cuda()
     neumann_vib = neumann_vib[:, sampler_vib.points_index, :]
 
     vertices_static = torch.from_numpy(obj_static.vertices).cuda().to(torch.float32)
@@ -91,8 +91,25 @@ def precompute_sample_points():
     cdf = sampler_vib.cdf[-1] + sampler_static.cdf[-1]
     importance = torch.cat([importance_vib, importance_static], dim=0)
     ks = torch.from_numpy(-np.array(wave_number)).to(torch.float32)
+
+    # vertices = torch.cat([vertices_vib, vertices_static], dim=0)
+    # triangles = torch.cat([triangles_vib, triangles_static + len(vertices_vib)], dim=0)
+    # neumann_tri = np.concatenate(
+    #     [neumann, np.zeros((mode_num, len(triangles_static)), dtype=np.complex64)],
+    #     axis=1,
+    # )
+    # CombinedFig().add_mesh(vertices, triangles, neumann_tri[0].real, opacity=1.0).show()
+
     torch.save(
         {
+            "vertices_vib": vertices_vib,
+            "triangles_vib": triangles_vib,
+            "vertices_static": vertices_static,
+            "triangles_static": triangles_static,
+            "neumann_vib": torch.from_numpy(neumann_vib_tri),
+            "neumann_static": torch.zeros(
+                mode_num, len(triangles_static), dtype=torch.complex64
+            ),
             "points_static": points_static,
             "points_vib": points_vib,
             "normal_static": normal_static,

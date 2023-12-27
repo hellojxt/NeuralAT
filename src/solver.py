@@ -184,7 +184,7 @@ class BiCGSTAB_batch:
         """
         self.init_params(*args, **kwargs)
         if self.status:
-            return self.x
+            return self.x, True
         iter_count = 0
         while self.nsteps:
             s = self.step()
@@ -192,12 +192,12 @@ class BiCGSTAB_batch:
             iter_count += 1
             if s:
                 # print(f"Converged in {iter_count} steps")
-                return self.x
+                return self.x, True
             if (self.rho == 0).all():
                 break
             self.nsteps -= 1
         print("Convergence has failed :(")
-        return self.x
+        return self.x, False
 
 
 class BiCGSTAB_batch2:

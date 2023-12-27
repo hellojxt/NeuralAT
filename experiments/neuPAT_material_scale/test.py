@@ -9,7 +9,7 @@ from tqdm import tqdm
 import json
 from src.timer import Timer
 import os
-from src.modalsound.model import get_spherical_surface_points
+from src.modalsound.model import get_spherical_surface_points, BEMModel
 from src.cuda_imp import (
     ImportanceSampler,
     MonteCarloWeight,
@@ -64,6 +64,21 @@ def calculate_ffat_map(size_scale, freq_scale, trg_points):
     return ffat_map
 
 
+def calculate_ffat_map_bem(size_scale, freq_scale, trg_points, ks):
+    size_k = np.exp(size_scale * (size_max - size_min) + size_min)
+    ffat_map = np.zeros((mode_num, len(trg_points)), dtype=np.complex64)
+    vertices = vertices_base * size_k
+    trg_points = trg_points * size_k
+    ks = ks * np.exp(freq_scale * (freq_max - freq_min) + freq_min)
+    for i, idx in enumerate(check_indices):
+        k = ks[idx]
+        neumann_coeff = neumann_tri[idx]
+        bem_model = BEMModel(vertices, triangles, k)
+        bem_model.boundary_equation_solve(neumann_coeff)
+        ffat_map[i] = bem_model.potential_solve(trg_points)
+    return np.abs(ffat_map)
+
+
 import json
 import numpy as np
 
@@ -73,6 +88,9 @@ with open(f"{data_dir}/../config.json", "r") as file:
 
 
 sample_data = torch.load(f"{data_dir}/../sample_points.pt")
+vertices_base = sample_data["vertices"].cpu().numpy()
+triangles = sample_data["triangles"].cpu().numpy()
+neumann_tri = sample_data["neumann_tri"].cpu().numpy()
 points_vib = sample_data["points_vib"].cuda()
 normal_vib = sample_data["normal_vib"].cuda()
 neumann = sample_data["neumann"].cuda()
@@ -113,19 +131,47 @@ model = NeuPAT(
 
 model.load_state_dict(torch.load(f"{data_dir}/model.pt"))
 model.eval()
-
+torch.set_grad_enabled(False)
 
 points = get_spherical_surface_points(points_vib, 1.5)
 
-freq_scale = 0.4
-size_scale = 0.4
+freq_scale = 0.8
+size_scale = 0.2
 ffat_map_gt = calculate_ffat_map(size_scale, freq_scale, points)
 ffat_map_gt = ((ffat_map_gt + 10e-6) / 10e-6).log10()
+
+check_indices = [1, 3, 8]
+
+ffat_map_bem = calculate_ffat_map_bem(
+    size_scale, freq_scale, points.cpu().numpy(), ks_base.cpu().numpy()
+)
+ffat_map_bem = np.log10((ffat_map_bem + 10e-6) / 10e-6)
+
+
 x = torch.zeros(len(points), 5, dtype=torch.float32, device="cuda")
 x[:, 0] = size_scale
 x[:, 1] = freq_scale
 x[:, 2:] = points
-ffat_map_model = model(x).T
 
-CombinedFig().add_points(points, ffat_map_gt[8], cmax=3.0, cmin=1.0).show()
-CombinedFig().add_points(points, ffat_map_model[8], cmax=3.0, cmin=1.0).show()
+ffat_map_model = model(x).T
+timer = Timer(True)
+ffat_map_model = model(x).T
+timer.log("model")
+
+from matplotlib import pyplot as plt
+
+for i, idx in enumerate(check_indices):
+    plt.figure()
+    plt.subplot(1, 3, 1)
+    plt.title("Ground Truth")
+    plt.imshow(ffat_map_gt[idx].cpu().numpy().reshape(64, 32))
+    plt.subplot(1, 3, 2)
+    plt.title("BEM")
+    plt.imshow(ffat_map_bem[i].reshape(64, 32))
+    plt.subplot(1, 3, 3)
+    plt.title("Model")
+    plt.imshow(ffat_map_model[idx].detach().cpu().numpy().reshape(64, 32))
+    plt.savefig(f"{data_dir}/ffat_map_{freq_scale}_{size_scale}_{idx}.png")
+    # CombinedFig().add_points(points, ffat_map_bem[i], cmax=3.0, cmin=1.0).show()
+    # CombinedFig().add_points(points, ffat_map_gt[idx], cmax=3.0, cmin=1.0).show()
+    # CombinedFig().add_points(points, ffat_map_model[idx], cmax=3.0, cmin=1.0).show()

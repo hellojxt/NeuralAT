@@ -117,7 +117,8 @@ print("src_sample_num:", src_sample_num)
 x = torch.zeros(src_sample_num, trg_sample_num, 10, dtype=torch.float32)
 y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
 
-for i in tqdm(range(src_sample_num)):
+
+def calculate_ffat_map():
     trg_pos = torch.rand(trg_sample_num, 3, device="cuda", dtype=torch.float32)
     trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
     while True:
@@ -153,8 +154,10 @@ for i in tqdm(range(src_sample_num)):
         )
         tol = config_data.get("solver", {}).get("tol", 1e-6)
         nsteps = config_data.get("solver", {}).get("nsteps", 100)
-        dirichlet_batch = solver.solve(b_batch, tol=tol, nsteps=nsteps).permute(2, 0, 1)
-
+        dirichlet_batch, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
+        dirichlet_batch = dirichlet_batch.permute(2, 0, 1)
+        if not convergence:
+            return ffat_map, src_pos, trg_pos, src_rot, False
         G0 = get_weights_potential_ks_base(
             ks_batch, trg_points, points, normals, importance, cdf, False
         )
@@ -170,6 +173,15 @@ for i in tqdm(range(src_sample_num)):
     # CombinedFig().add_points(points, neumann[63].real).add_points(
     #     trg_points, ffat_map[63].real
     # ).show()
+
+    return ffat_map, src_pos, trg_pos, src_rot, True
+
+
+for i in tqdm(range(src_sample_num)):
+    while True:
+        ffat_map, src_pos, trg_pos, src_rot, success = calculate_ffat_map()
+        if success:
+            break
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()
     x[i, :, 6:10] = src_rot.cpu()

@@ -92,6 +92,8 @@ def get_mesh_size(vertices):
 
 
 def get_spherical_surface_points(vertices, scale=2):
+    if isinstance(vertices, torch.Tensor):
+        vertices = vertices.cpu().numpy()
     points = unit_sphere_surface_points(32)
     points = points.reshape(-1, 3)
     points = points * get_mesh_size(vertices) * scale + get_mesh_center(vertices)

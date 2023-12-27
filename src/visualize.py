@@ -472,7 +472,9 @@ class CombinedFig:
             )
         return self
 
-    def add_points(self, coords, data=None, point_size=5, showscale=True):
+    def add_points(
+        self, coords, data=None, point_size=5, showscale=True, cmax=None, cmin=None
+    ):
         if data is None:
             data = np.ones(len(coords))
         else:
@@ -480,8 +482,9 @@ class CombinedFig:
 
         coords, data = [torch_to_numpy(x) for x in [coords, data]]
         coords = coords.reshape(-1, 3)
-        cmax = data.max()
-        cmin = data.min()
+        if cmax is None or cmin is None:
+            cmax = data.max()
+            cmin = data.min()
         print("cmin = ", cmin, "cmax = ", cmax)
         self.fig.add_trace(
             go.Scatter3d(

@@ -55,6 +55,9 @@ cdf = sampler_vib.cdf[-1]
 ks = torch.from_numpy(-np.array(wave_number)).to(torch.float32)
 torch.save(
     {
+        "vertices": vertices_vib,
+        "triangles": triangles_vib,
+        "neumann_tri": torch.from_numpy(neumann),
         "points_vib": points_vib,
         "normal_vib": normal_vib,
         "neumann": neumann_vib,

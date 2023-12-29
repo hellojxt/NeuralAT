@@ -2,14 +2,6 @@ import sys
 
 sys.path.append("./")
 
-from src.modalsound.model import (
-    ModalSoundObj,
-    MatSet,
-    Material,
-    BEMModel,
-    MeshObj,
-    get_spherical_surface_points,
-)
 from src.cuda_imp import (
     ImportanceSampler,
     MonteCarloWeight,

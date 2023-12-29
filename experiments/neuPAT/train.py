@@ -24,7 +24,7 @@ ys = torch.cat(ys, dim=0).reshape(-1, ys[0].shape[-1])
 ys = ((ys + 10e-6) / 10e-6).log10()
 
 xs = xs.cuda()
-ys = ys.cuda()[:, :10]
+ys = ys.cuda()
 
 xs_train = xs[: int(len(xs) * 0.8)]
 ys_train = ys[: int(len(ys) * 0.8)]

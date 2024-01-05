@@ -114,6 +114,7 @@ class BiCGSTAB_batch:
     def __init__(self, Ax_gen, device="cuda"):
         self.Ax_gen = Ax_gen
         self.device = device
+        self.log_rerr = []
 
     def init_params(self, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
         # b: The R.H.S of the system. of shape (n, 1, batch_size)
@@ -136,6 +137,7 @@ class BiCGSTAB_batch:
         r = self.b - self.Ax_gen(x)
         rdotr = self.batch_vdot(r, r)
         self.rdotr = rdotr
+        self.log_rerr.append(rdotr.mean().item())
         if (rdotr < self.residual_tol).all() or (rdotr < self.atol).all():
             return True, r
         else:

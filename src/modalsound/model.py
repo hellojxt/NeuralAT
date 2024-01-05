@@ -24,8 +24,8 @@ from skimage.metrics import structural_similarity as ssim
 def complex_ssim(x, y):
     x = np.abs(x)
     y = np.abs(y)
-    max_val = max(x.max(), y.max())
-    min_val = min(x.min(), y.min())
+    max_val = x.max()
+    min_val = x.min()
     return ssim(x, y, data_range=max_val - min_val)
 
 

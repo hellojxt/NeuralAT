@@ -41,7 +41,7 @@ sample_data = torch.load(f"{data_dir}/sample_points.pt")
 points_vib = sample_data["points_vib"].cuda()
 normal_vib = sample_data["normal_vib"].cuda()
 neumann = sample_data["neumann"].cuda()
-cdf = sample_data["cdf"].item()
+cdf_base = sample_data["cdf"].item()
 importance = sample_data["importance"].cuda()
 ks_base = sample_data["ks"].cuda()
 
@@ -68,7 +68,8 @@ print("src_sample_num:", src_sample_num)
 x = torch.zeros(src_sample_num, trg_sample_num, 5, dtype=torch.float32)
 y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
 
-for i in tqdm(range(src_sample_num)):
+
+def generate():
     trg_pos = torch.rand(trg_sample_num, 3, device="cuda", dtype=torch.float32)
     trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
     ffat_map = torch.zeros(mode_num, trg_sample_num, 1, dtype=torch.complex64).cuda()
@@ -77,9 +78,11 @@ for i in tqdm(range(src_sample_num)):
     freq_scale = torch.rand(1, device="cuda", dtype=torch.float32)
     ks = ks_base * torch.exp(freq_scale * (freq_max - freq_min) + freq_min)
     size_scale = torch.rand(1, device="cuda", dtype=torch.float32)
-    points = points_vib * torch.exp(size_scale * (size_max - size_min) + size_min)
+    size_k = torch.exp(size_scale * (size_max - size_min) + size_min)
+    points = points_vib * size_k
     normals = normal_vib
-    trg_pos = trg_points * torch.exp(size_scale * (size_max - size_min) + size_min)
+    trg_points = trg_points * size_k
+    cdf = cdf_base * size_k**2
     while idx < mode_num:
         ks_batch = ks[idx : idx + batch_step]
         neumann_batch = neumann[idx : idx + batch_step]
@@ -95,8 +98,10 @@ for i in tqdm(range(src_sample_num)):
         )
         tol = config_data.get("solver", {}).get("tol", 1e-6)
         nsteps = config_data.get("solver", {}).get("nsteps", 100)
-        dirichlet_batch = solver.solve(b_batch, tol=tol, nsteps=nsteps).permute(2, 0, 1)
-
+        dirichlet_batch, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
+        dirichlet_batch = dirichlet_batch.permute(2, 0, 1)
+        if not convergence:
+            return None, None, None, None, False
         G0 = get_weights_potential_ks_base(
             ks_batch, trg_points, points, normals, importance, cdf, False
         )
@@ -109,9 +114,17 @@ for i in tqdm(range(src_sample_num)):
         idx += batch_step
     ffat_map = ffat_map.abs().squeeze(-1)
 
-    CombinedFig().add_points(points, dirichlet_batch[0].real).add_points(
-        trg_points, ffat_map[0].real
-    ).show()
+    # CombinedFig().add_points(points, dirichlet_batch[0].real).add_points(
+    #     trg_points, ffat_map[0].real
+    # ).show()
+    return ffat_map, trg_pos, size_scale, freq_scale, True
+
+
+for i in tqdm(range(src_sample_num)):
+    while True:
+        ffat_map, trg_pos, size_scale, freq_scale, success = generate()
+        if success:
+            break
 
     x[i, :, 0] = size_scale.cpu()
     x[i, :, 1] = freq_scale.cpu()

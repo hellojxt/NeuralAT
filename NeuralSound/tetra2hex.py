@@ -10,7 +10,7 @@ from tqdm import tqdm
 from classic.voxelize.hexahedral import Hexa_model
 from classic.fem.util import to_sparse_coords
 from classic.bem.util import boundary_encode, boundary_voxel
-from src.visualize import plot_point_cloud
+from src.visualize import CombinedFig
 from src.modalsound.model import MeshObj
 from scipy.spatial import KDTree
 from torch_geometric.nn.unpool import knn_interpolate
@@ -52,6 +52,8 @@ def get_mesh_size(vertices):
 
 def run():
     for obj_path in obj_dir:
+        if not os.path.isdir(obj_path):
+            continue
         data = np.load(obj_path + "/bem.npz")
         vertices, triangles = data["vertices"], data["triangles"]
         vertices = normalize_vertices(vertices)
@@ -81,8 +83,6 @@ def run():
         vecs = neumann[idx]
         if vecs.dtype == np.complex64 or vecs.dtype == np.complex128:
             vecs = vecs.real.astype(np.float32)
-
-        vecs = vecs * (get_mesh_size(data["vertices"]) / 0.15) ** (-5 / 2)
         cost_time = time() - start_time
         image_size = 32
 

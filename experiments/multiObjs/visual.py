@@ -44,7 +44,8 @@ for obj_path in obj_dir:
 
     for i in range(mode_num):
         plt.subplot(1, 3, 1)
-        plt.imshow(np.abs(bem_ffat[i]), label="bem")
+        plt.imshow(np.abs(bem_ffat[i]), label=f"bem")
+        plt.title(f"{obj_path.split('/')[-1]}_{i}")
         plt.colorbar()
         plt.subplot(1, 3, 2)
         plt.imshow(NeuralSound_ffat[i], label="NeuralSound")

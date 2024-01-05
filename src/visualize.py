@@ -11,6 +11,8 @@ from PIL import Image
 def torch_to_numpy(tensor):
     if isinstance(tensor, torch.Tensor):
         return tensor.detach().cpu().numpy()
+    elif isinstance(tensor, list):
+        return np.array(tensor)
     else:
         return tensor
 
@@ -475,12 +477,12 @@ class CombinedFig:
     def add_points(
         self, coords, data=None, point_size=5, showscale=True, cmax=None, cmin=None
     ):
+        coords, data = [torch_to_numpy(x) for x in [coords, data]]
         if data is None:
             data = np.ones(len(coords))
         else:
             data = data.reshape(-1)
 
-        coords, data = [torch_to_numpy(x) for x in [coords, data]]
         coords = coords.reshape(-1, 3)
         if cmax is None or cmin is None:
             cmax = data.max()

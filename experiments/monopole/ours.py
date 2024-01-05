@@ -31,11 +31,12 @@ obj.center[0] += config.getfloat("mesh", "offset_x")
 obj.center[1] += config.getfloat("mesh", "offset_y")
 obj.center[2] += config.getfloat("mesh", "offset_z")
 x0 = obj.center
-n0 = [0, 1, 0]
-freqs = [20, 200, 2000]
+freqs = [2000]
 points = obj.spherical_surface_points(2)
-Ms = [0, 1]
-
+Ms = [1]
+x1 = x0 + np.array([0, 0.05, 0])
+x2 = x0 + np.array([0, -0.05, 0])
+x3 = x0 + np.array([0, 0, 0])
 SNRs = np.zeros((len(Ms), len(freqs)))
 
 vertices = torch.from_numpy(obj.vertices).cuda().to(torch.float32)
@@ -58,8 +59,14 @@ for i in range(2):
         for j, freq in enumerate(freqs):
             k = freq * 2 * np.pi / 343.2
             ks.append(-k)
-            model = MultipoleModel(x0, n0, -k, M)
-            neumann_coeff = model.solve_neumann(sampler.points, sampler.points_normals)
+            model1 = MultipoleModel(x1, [1, 0, 0], -k, M)
+            model2 = MultipoleModel(x2, [0, 1, 0], -k, M)
+            model3 = MultipoleModel(x3, [0, 0, 1], -k, M)
+            neumann_coeff = (
+                model1.solve_neumann(sampler.points, sampler.points_normals)
+                + model2.solve_neumann(sampler.points, sampler.points_normals)
+                + model3.solve_neumann(sampler.points, sampler.points_normals)
+            )
             neumann_data.append(neumann_coeff)
 
     neumann = torch.stack(neumann_data, dim=0).unsqueeze(-1)
@@ -84,7 +91,8 @@ for i in range(2):
 
     tol = config.getfloat("solver", "tol")
     nsteps = config.getint("solver", "nsteps")
-    dirichlet = solver.solve(b_batch, tol=tol, nsteps=nsteps).permute(2, 0, 1)
+    dirichlet, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
+    dirichlet = dirichlet.permute(2, 0, 1)
     # dirichlet = (torch.linalg.inv(G1_batch[0]) @ b_batch.squeeze(-1)).reshape(1, -1, 1)
     timer.log("solve equation", record=True)
     timer_solver.log("solve equation", record=True)
@@ -104,8 +112,11 @@ for i, M in enumerate(Ms):
     for j, freq in enumerate(freqs):
         points_dirichlet = ffat_map_ours[i, j]
         k = freq * 2 * np.pi / 343.2
-        model = MultipoleModel(x0, n0, -k, M)
-        points_dirichlet_gt = model.solve_dirichlet(points).cpu().numpy()
+        points_dirichlet_gt = (
+            model1.solve_dirichlet(points).cpu().numpy()
+            + model2.solve_dirichlet(points).cpu().numpy()
+            + model3.solve_dirichlet(points).cpu().numpy()
+        )
         SNRs[i, j] = SNR(points_dirichlet_gt, points_dirichlet)
         # if i == 1 and j == 0:
         #     CombinedFig().add_mesh(obj.vertices, obj.triangles).add_points(

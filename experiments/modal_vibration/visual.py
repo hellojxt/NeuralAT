@@ -1,4 +1,5 @@
 import sys
+import os
 
 sys.path.append("./")
 
@@ -14,6 +15,9 @@ root_dir = "dataset/modal_vibration"
 obj_dir = glob(f"{root_dir}/*")
 
 for obj_path in obj_dir:
+    # skip if obj_path is not a directory
+    if not os.path.isdir(obj_path):
+        continue
     bem_data = np.load(obj_path + "/bem.npz")
     NeuralSound_data = np.load(obj_path + "/NeuralSound.npz")
     ours_data = np.load(obj_path + "/ours.npz")
@@ -41,15 +45,15 @@ for obj_path in obj_dir:
             f"{obj_path.split('/')[-1]}_{i}: NeuralSound SNR: {SNR(bem_ffat[i], NeuralSound_ffat[i])}, SSIM: {complex_ssim(bem_ffat[i], NeuralSound_ffat[i])}, time: {NeuralSound_time}"
         )
 
-    for i in range(8):
-        plt.subplot(2, 2, 2)
-        plt.imshow(np.abs(bem_ffat[i]), label="bem")
-        plt.colorbar()
-        plt.subplot(2, 2, 3)
-        plt.imshow(NeuralSound_ffat[i], label="NeuralSound")
-        plt.colorbar()
-        plt.subplot(2, 2, 4)
-        plt.imshow(np.abs(ours_ffat[i]), label="ours")
-        plt.colorbar()
-        plt.show()
-        plt.close()
+    # for i in range(8):
+    #     plt.subplot(2, 2, 2)
+    #     plt.imshow(np.abs(bem_ffat[i]), label="bem")
+    #     plt.colorbar()
+    #     plt.subplot(2, 2, 3)
+    #     plt.imshow(NeuralSound_ffat[i], label="NeuralSound")
+    #     plt.colorbar()
+    #     plt.subplot(2, 2, 4)
+    #     plt.imshow(np.abs(ours_ffat[i]), label="ours")
+    #     plt.colorbar()
+    #     plt.show()
+    #     plt.close()

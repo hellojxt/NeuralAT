@@ -97,8 +97,8 @@ if __name__ == "__main__":
     )
     from glob import glob
 
-    data_dir_list = glob(args.dataset + "/*")
-    sample_data = np.load(data_dir_list[0] + "/voxel.npz")
+    data_dir_list = glob(args.dataset + "/*/voxel.npz")
+    sample_data = np.load(data_dir_list[0])
     mode_num = len(sample_data["freqs"])
     Config.BATCH_SIZE = mode_num
     Config.dataset_worker_num = 8

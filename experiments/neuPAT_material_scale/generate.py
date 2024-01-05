@@ -43,7 +43,7 @@ normal_vib = sample_data["normal_vib"].cuda()
 neumann = sample_data["neumann"].cuda()
 cdf_base = sample_data["cdf"].item()
 importance = sample_data["importance"].cuda()
-ks_base = sample_data["ks"].cuda()
+ks_base = sample_data["ks"].cuda() 
 
 mode_num = len(ks_base)
 trg_pos_min = torch.tensor(
@@ -55,9 +55,8 @@ trg_pos_max = torch.tensor(
 size_scale_factor = config_data.get("solver", {}).get("size_scale_factor")
 size_max = np.log(size_scale_factor)
 size_min = -size_max
-freq_scale_factor = config_data.get("solver", {}).get("freq_scale_factor")
-freq_max = np.log(freq_scale_factor)
-freq_min = -freq_max
+freq_min = np.log(config_data.get("solver", {}).get("freq_scale_min"))
+freq_max = np.log(config_data.get("solver", {}).get("freq_scale_max"))
 print("trg_pos_min:", trg_pos_min)
 print("trg_pos_max:", trg_pos_max)
 trg_sample_num = config_data.get("solver", {}).get("trg_sample_num", 1000)
@@ -76,7 +75,8 @@ def generate():
     idx = 0
     batch_step = 8
     freq_scale = torch.rand(1, device="cuda", dtype=torch.float32)
-    ks = ks_base * torch.exp(freq_scale * (freq_max - freq_min) + freq_min)
+    freq_k = torch.exp(freq_scale * (freq_max - freq_min) + freq_min)
+    ks = ks_base * freq_k
     size_scale = torch.rand(1, device="cuda", dtype=torch.float32)
     size_k = torch.exp(size_scale * (size_max - size_min) + size_min)
     points = points_vib * size_k
@@ -101,6 +101,7 @@ def generate():
         dirichlet_batch, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
         dirichlet_batch = dirichlet_batch.permute(2, 0, 1)
         if not convergence:
+            print(freq_k, size_k, ks_batch)
             return None, None, None, None, False
         G0 = get_weights_potential_ks_base(
             ks_batch, trg_points, points, normals, importance, cdf, False
@@ -131,4 +132,4 @@ for i in tqdm(range(src_sample_num)):
     x[i, :, 2:] = trg_pos.cpu()
     y[i] = ffat_map.T.cpu()
 
-torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[2]}.pt")
+torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[1]}.pt")

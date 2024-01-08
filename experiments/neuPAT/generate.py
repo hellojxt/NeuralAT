@@ -8,6 +8,7 @@ from src.cuda_imp import (
     get_weights_boundary_ks_base,
     get_weights_potential_ks_base,
 )
+from src.modalsound.model import get_spherical_surface_points
 from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
 from src.solver import BiCGSTAB_batch
 import numpy as np
@@ -18,8 +19,9 @@ from time import time
 import configparser
 import meshio
 import torch
+from src.ffat_solve import monte_carlo_solve, bem_solve
 
-data_dir = sys.argv[1]
+data_dir = "dataset/NeuPAT/bowl"
 
 import json
 import numpy as np
@@ -72,17 +74,13 @@ def rotate_points(points, quaternion):
 with open(f"{data_dir}/config.json", "r") as file:
     config_data = json.load(file)
 
-
-sample_data = torch.load(f"{data_dir}/sample_points.pt")
-points_static = sample_data["points_static"].cuda()
-points_vib = sample_data["points_vib"].cuda()
-normal_static = sample_data["normal_static"].cuda()
-normal_vib = sample_data["normal_vib"].cuda()
-neumann = sample_data["neumann"].cuda()
-cdf = sample_data["cdf"].item()
-importance = sample_data["importance"].cuda()
-ks = sample_data["ks"].cuda()
-
+data = torch.load(f"{data_dir}/modal_data.pt")
+vertices_vib = data["vertices_vib"].cuda()
+triangles_vib = data["triangles_vib"].cuda()
+vertices_static = data["vertices_static"].cuda()
+triangles_static = data["triangles_static"].cuda()
+neumann_tri = data["neumann_tri"].cuda()
+ks = data["ks"].cuda()
 mode_num = len(ks)
 src_pos_min = torch.tensor(
     config_data.get("solver", {}).get("src_pos_min"), device="cuda", dtype=torch.float32
@@ -115,68 +113,43 @@ def calculate_ffat_map():
     trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
     while True:
         src_rot = sample_uniform_quaternion()
-        points_vib_updated = rotate_points(points_vib, src_rot)
-        normal_vib_updated = rotate_points(normal_vib, src_rot)
+        vertices_vib_updated = rotate_points(vertices_vib, src_rot)
         src_pos = torch.rand(3, device="cuda", dtype=torch.float32)
         displacement = src_pos * (src_pos_max - src_pos_min) + src_pos_min
-        points_vib_updated = points_vib_updated + displacement
-        if points_vib_updated[:, 1].min() > 0.005:
+        vertices_vib_updated = vertices_vib_updated + displacement
+        if vertices_vib_updated[:, 1].min() > 0.001:
             trg_points = rotate_points(trg_points, src_rot)
             trg_points = trg_points + displacement
             break
+    vertices = torch.cat([vertices_vib_updated, vertices_static], dim=0).cuda()
+    triangles = torch.cat(
+        [triangles_vib, triangles_static + len(vertices_vib)], dim=0
+    ).cuda()
 
-    points = torch.cat([points_vib_updated, points_static], dim=0)
-    normals = torch.cat([normal_vib_updated, normal_static], dim=0)
-
-    ffat_map = torch.zeros(mode_num, trg_sample_num, 1, dtype=torch.complex64).cuda()
-    idx = 0
-    batch_step = 8
-    while idx < mode_num:
-        ks_batch = ks[idx : idx + batch_step]
-        neumann_batch = neumann[idx : idx + batch_step]
-        G0_batch = get_weights_boundary_ks_base(
-            ks_batch, points, normals, importance, cdf, False
+    while True:
+        ffat_map, convergence = monte_carlo_solve(
+            vertices, triangles, neumann_tri, ks, trg_points, 3500
         )
-        G1_batch = get_weights_boundary_ks_base(
-            ks_batch, points, normals, importance, cdf, True
-        )
-        b_batch = torch.bmm(G0_batch, neumann_batch).permute(1, 2, 0)
-        solver = BiCGSTAB_batch(
-            lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
-        )
-        tol = config_data.get("solver", {}).get("tol", 1e-6)
-        nsteps = config_data.get("solver", {}).get("nsteps", 100)
-        dirichlet_batch, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
-        dirichlet_batch = dirichlet_batch.permute(2, 0, 1)
-        if not convergence:
-            return ffat_map, src_pos, trg_pos, src_rot, False
-        G0 = get_weights_potential_ks_base(
-            ks_batch, trg_points, points, normals, importance, cdf, False
-        )
-        G1 = get_weights_potential_ks_base(
-            ks_batch, trg_points, points, normals, importance, cdf, True
-        )
-
-        ffat_map[idx : idx + batch_step] = G1 @ dirichlet_batch - G0 @ neumann_batch
-
-        idx += batch_step
-    ffat_map = ffat_map.abs().squeeze(-1)
-
-    # CombinedFig().add_points(points, neumann[63].real).add_points(
-    #     trg_points, ffat_map[63].real
-    # ).show()
-
-    return ffat_map, src_pos, trg_pos, src_rot, True
+        if convergence:
+            break
+    ffat_map = torch.from_numpy(np.abs(ffat_map))
+    # ffat_map_bem = np.abs(bem_solve(vertices, triangles, neumann_tri, ks, trg_points))
+    # import matplotlib.pyplot as plt
+    # plt.subplot(121)
+    # plt.imshow(ffat_map[0].reshape(50, 20))
+    # plt.colorbar()
+    # plt.subplot(122)
+    # plt.imshow(ffat_map_bem[0].reshape(50, 20))
+    # plt.colorbar()
+    # plt.show()
+    return ffat_map, src_pos, trg_pos, src_rot
 
 
 for i in tqdm(range(src_sample_num)):
-    while True:
-        ffat_map, src_pos, trg_pos, src_rot, success = calculate_ffat_map()
-        if success:
-            break
+    ffat_map, src_pos, trg_pos, src_rot = calculate_ffat_map()
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()
     x[i, :, 6:10] = src_rot.cpu()
-    y[i] = ffat_map.T.cpu()
+    y[i] = ffat_map.T
 
-torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[2]}.pt")
+torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[1]}.pt")

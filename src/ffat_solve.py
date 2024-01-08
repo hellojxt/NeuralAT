@@ -87,7 +87,7 @@ def monte_carlo_solve(
     mode_num = len(ks)
     ffat_map = torch.zeros(mode_num, len(trg_points), dtype=torch.complex64).cuda()
     while idx < mode_num:
-        ffat_map[idx : idx + batch_step], convergence = monte_carlo_sampler_solve(
+        ffat_map_batch, convergence = monte_carlo_sampler_solve(
             sampler,
             neumann_tri[idx : idx + batch_step],
             ks[idx : idx + batch_step],
@@ -97,6 +97,7 @@ def monte_carlo_solve(
         )
         if not convergence:
             return None, False
+        ffat_map[idx : idx + batch_step] = ffat_map_batch
         idx += batch_step
     return ffat_map.cpu().numpy(), convergence
 

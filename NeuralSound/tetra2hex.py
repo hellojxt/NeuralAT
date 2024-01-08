@@ -60,7 +60,7 @@ def run():
 
         triangles_center = vertices[triangles].mean(axis=1)
         normals = update_normals(vertices, triangles).reshape(1, -1, 3)
-        wave_number = data["wave_number"]
+        wave_number = np.abs(data["wave_number"])
         freqs = wave_number * 343.2 / (2 * np.pi)
 
         mode_num = len(wave_number)

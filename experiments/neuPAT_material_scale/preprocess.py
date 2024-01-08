@@ -32,38 +32,23 @@ for obj in vibration_objects:
     obj_vib.modal_analysis(k=mode_num, material=Material(getattr(MatSet, material)))
     print(obj_vib.get_frequencies())
 
-radius = config_data.get("solver").get("radius")
-importance_vib = torch.ones(len(obj_vib.surf_triangles), dtype=torch.float32).cuda()
 vertices_vib = torch.from_numpy(obj_vib.surf_vertices).cuda().to(torch.float32)
 triangles_vib = torch.from_numpy(obj_vib.surf_triangles).cuda().to(torch.int32)
-sampler_vib = ImportanceSampler(vertices_vib, triangles_vib, importance_vib, 400000)
-sampler_vib.update()
-sampler_vib.poisson_disk_resample(radius, 8)
-print("vibration points:", sampler_vib.num_samples)
 
-neumann = np.zeros((mode_num, len(triangles_vib)), dtype=np.complex64)
+neumann_tri = np.zeros((mode_num, len(triangles_vib)), dtype=np.complex64)
 wave_number = []
 for i in range(mode_num):
-    neumann[i] = obj_vib.get_triangle_neumann(i)
-    wave_number.append(obj_vib.get_wave_number(i))
+    neumann_tri[i] = obj_vib.get_triangle_neumann(i)
+    wave_number.append(-obj_vib.get_wave_number(i))
 
-neumann_vib = torch.from_numpy(neumann).unsqueeze(-1).cuda()
-neumann_vib = neumann_vib[:, sampler_vib.points_index, :]
-points_vib = sampler_vib.points
-normal_vib = sampler_vib.points_normals
-cdf = sampler_vib.cdf[-1]
-ks = torch.from_numpy(-np.array(wave_number)).to(torch.float32)
+neumann_tri = torch.from_numpy(neumann_tri).cuda()
+ks = torch.tensor(wave_number).to(torch.float32).cuda()
 torch.save(
     {
         "vertices": vertices_vib,
         "triangles": triangles_vib,
-        "neumann_tri": torch.from_numpy(neumann),
-        "points_vib": points_vib,
-        "normal_vib": normal_vib,
-        "neumann": neumann_vib,
-        "cdf": cdf,
-        "importance": importance_vib,
+        "neumann_tri": neumann_tri,
         "ks": ks,
     },
-    f"{data_dir}/sample_points.pt",
+    f"{data_dir}/modal_data.pt",
 )

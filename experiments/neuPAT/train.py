@@ -23,9 +23,6 @@ xs = torch.cat(xs, dim=0).reshape(-1, xs[0].shape[-1])
 ys = torch.cat(ys, dim=0).reshape(-1, ys[0].shape[-1])
 ys = ((ys + 10e-6) / 10e-6).log10()
 
-xs = xs.cuda()
-ys = ys.cuda()
-
 xs_train = xs[: int(len(xs) * 0.8)]
 ys_train = ys[: int(len(ys) * 0.8)]
 xs_test = xs[int(len(xs) * 0.8) :]
@@ -56,7 +53,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(
 
 # Custom shuffle function that operates on the GPU
 def shuffle_tensors(x, y):
-    indices = torch.randperm(x.size(0)).cuda()
+    indices = torch.randperm(x.size(0))
     return x[indices], y[indices]
 
 
@@ -65,11 +62,12 @@ test_step = train_params.get("test_step")
 for epoch_idx in tqdm(range(max_epochs)):
     # Create batches manually
     if epoch_idx % 10 == 0:
+        torch.cuda.empty_cache()
         xs_train, ys_train = shuffle_tensors(xs_train, ys_train)
 
     for batch_idx in range(0, len(xs_train), batch_size):
-        x_batch = xs_train[batch_idx : batch_idx + batch_size]
-        y_batch = ys_train[batch_idx : batch_idx + batch_size]
+        x_batch = xs_train[batch_idx : batch_idx + batch_size].cuda()
+        y_batch = ys_train[batch_idx : batch_idx + batch_size].cuda()
 
         # Forward and backward passes
         y_pred = model(x_batch)
@@ -82,8 +80,8 @@ for epoch_idx in tqdm(range(max_epochs)):
     if epoch_idx % test_step == 0:
         loss_test = []
         for batch_idx in range(0, len(xs_test), batch_size):
-            x_batch = xs_test[batch_idx : batch_idx + batch_size]
-            y_batch = ys_test[batch_idx : batch_idx + batch_size]
+            x_batch = xs_test[batch_idx : batch_idx + batch_size].cuda()
+            y_batch = ys_test[batch_idx : batch_idx + batch_size].cuda()
             y_pred = model(x_batch)
             loss = torch.nn.functional.mse_loss(y_pred, y_batch)
             loss_test.append(loss.item())

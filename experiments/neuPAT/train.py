@@ -14,7 +14,7 @@ data_dir = sys.argv[1]
 data_points_lst = glob(f"{data_dir}/../data_*.pt")
 xs = []
 ys = []
-for data_points in data_points_lst:
+for data_points in data_points_lst[:2000]:
     data = torch.load(data_points)
     xs.append(data["x"])
     ys.append(data["y"])

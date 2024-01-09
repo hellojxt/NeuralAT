@@ -71,39 +71,14 @@ def bem_process(vertices, ks, trg_points):
     return bem_solve(vertices, triangles, neumann_tri, ks, trg_points)
 
 
-def check_correctness(s, f):
-    size_rn = s * (size_max - size_min) + size_min
-    freq_rn = f * (freq_max - freq_min) + freq_min
-    size_k = np.exp(size_rn)
-    freq_k = np.exp(freq_rn)
-    vertices = vertices_base * size_k
-    ks = ks_base * freq_k / size_k
-    trg_points = get_spherical_surface_points(vertices)
-    ffat_map_1, convergence = monte_carlo_process(vertices, ks, trg_points)
-    ffat_map_2 = bem_process(vertices, ks, trg_points)
+check_correct = False
 
-    # CombinedFig().add_points(trg_points, ffat_map_2[0].real).show()
-    # CombinedFig().add_points(trg_points, ffat_map_1[0].imag).show()
-    # CombinedFig().add_points(trg_points, ffat_map_2[0].imag).show()
+x = torch.zeros(src_sample_num, 64 * 32, 5, dtype=torch.float32)
+y = torch.zeros(src_sample_num, 64 * 32, mode_num, dtype=torch.float32)
 
-    for i in range(8):
-        v_min, v_max = np.min(np.abs(ffat_map_2[i])), np.max(np.abs(ffat_map_2[i]))
-        plt.subplot(2, 8, i + 1)
-        plt.imshow(np.abs(ffat_map_1[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
-        plt.colorbar()
-        plt.subplot(2, 8, i + 9)
-        plt.imshow(np.abs(ffat_map_2[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
-        plt.colorbar()
-    plt.savefig(f"{data_dir}/compare_{s}_{f}_{size_k:.2f}_{freq_k:.2f}.png")
-    plt.close()
-
-
-# for i in range(0, 11, 5):
-#     for j in range(0, 11, 5):
-#         check_correctness(i / 10, j / 10)
-
-x = torch.zeros(src_sample_num, trg_sample_num, 5, dtype=torch.float32)
-y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
+xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
+ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
+gridx, gridy = torch.meshgrid(xs, ys)
 for i in tqdm(range(src_sample_num)):
     while True:
         size_scale = torch.rand(1).cuda()
@@ -114,10 +89,21 @@ for i in tqdm(range(src_sample_num)):
         freq_k = torch.exp(freq_k)
         vertices = vertices_base * size_k
         ks = ks_base * freq_k / size_k
-        trg_pos = torch.rand(trg_sample_num, 3).cuda()
-        trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
-        trg_points = trg_points * size_k
+        r_min = 1.5
+        r_max = 3.0
+        trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
+        r_scale = torch.rand(1).cuda()
+        r = (r_scale * (r_max - r_min) + r_min).item()
+        trg_pos[:, :, 0] = r_scale
+        trg_pos[:, :, 1] = gridx
+        trg_pos[:, :, 2] = gridy
+        trg_pos = trg_pos.reshape(-1, 3)
+
+        trg_points = get_spherical_surface_points(vertices, r)
+        trg_points = trg_points
         ffat_map, convergence = monte_carlo_process(vertices, ks, trg_points)
+        if check_correct:
+            ffat_map_bem = bem_process(vertices, ks, trg_points)
         if convergence:
             break
 
@@ -125,17 +111,20 @@ for i in tqdm(range(src_sample_num)):
     x[i, :, 1] = freq_scale.cpu()
     x[i, :, 2:] = trg_pos.cpu()
     y[i] = torch.from_numpy(np.abs(ffat_map)).T
-
-    # ffat_map_2 = bem_process(vertices, ks, trg_points)
-    # plt.subplot(121)
-    # plt.imshow(np.abs(ffat_map[0]).reshape(50, 20))
-    # plt.colorbar()
-    # plt.subplot(122)
-    # plt.imshow(np.abs(ffat_map_2[0]).reshape(50, 20))
-    # plt.colorbar()
-    # plt.show()
-    # CombinedFig().add_mesh(vertices, triangles).add_points(
-    #     trg_points, ffat_map[0].real
-    # ).show()
+    if check_correct:
+        for i in range(8):
+            v_min, v_max = np.min(np.abs(ffat_map_bem[i])), np.max(
+                np.abs(ffat_map_bem[i])
+            )
+            plt.subplot(2, 8, i + 1)
+            plt.imshow(np.abs(ffat_map[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
+            plt.colorbar()
+            plt.subplot(2, 8, i + 9)
+            plt.imshow(np.abs(ffat_map_bem[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
+            plt.colorbar()
+        plt.savefig(
+            f"{data_dir}/compare_{size_scale.item():.2f}_{freq_scale.item():.2f}_{r_scale.item():.2f}.png"
+        )
+        plt.close()
 
 torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[1]}.pt")

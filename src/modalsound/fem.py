@@ -24,7 +24,6 @@ class MatSet:
     Ceramic = 2700, 7.2e10, 0.19, 6, 1e-7
     Glass = 2600, 6.2e10, 0.20, 1, 1e-7
     Wood = 750, 1.1e10, 0.25, 60, 2e-6
-    CustomPlastic = 1070, 1.4e8, 0.35, 30, 1e-6
     Plastic = 1070, 1.4e9, 0.35, 30, 1e-6
     Iron = 8000, 2.1e11, 0.28, 5, 1e-7
     Polycarbonate = 1190, 2.4e9, 0.37, 0.5, 4e-7
@@ -44,10 +43,32 @@ class MatSet:
         ]
         return Material(mat_lst[np.random.randint(0, len(mat_lst))])
 
+    def relative_freq_k():
+        mat_lst = [
+            MatSet.Ceramic,
+            MatSet.Glass,
+            MatSet.Wood,
+            MatSet.Plastic,
+            MatSet.Iron,
+            MatSet.Polycarbonate,
+            MatSet.Steel,
+            MatSet.Tin,
+        ]
+        lst = []
+        base = mat_lst[0][1] / mat_lst[0][0]
+        for mat in mat_lst:
+            lst.append((mat[1] / mat[0] / base) ** 0.5)
+        return lst
+
 
 class Material(object):
     def __init__(self, material):
         self.density, self.youngs, self.poison, self.alpha, self.beta = material
+
+    def relative_freq(self):
+        return (
+            self.youngs / self.density / (MatSet.Ceramic[1] / MatSet.Ceramic[0])
+        ) ** 0.5
 
 
 cuda_dir = os.path.dirname(__file__) + "/cuda"

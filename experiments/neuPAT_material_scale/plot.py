@@ -21,6 +21,9 @@ ffat_map_NeuralSound = np.load(f"{data_dir}/NeuralSound.npz")["ffat_map"].reshap
     -1, 64, 32
 )
 ffat_map_neuPAT = np.load(f"{data_dir}/neuPAT.npz")["ffat_map"].reshape(-1, 64, 32)
+# ys = ((ys + 10e-6) / 10e-6).log10()
+ffat_map_neuPAT = (10**ffat_map_neuPAT) * 10e-6 - 10e-6
+
 ffat_map_ours = np.load(f"{data_dir}/ours.npz")["ffat_map"].reshape(-1, 64, 32)
 ffat_map_bem = np.load(f"{data_dir}/bem.npz")["ffat_map"].reshape(-1, 64, 32)
 points = np.load(f"{data_dir}/bem.npz")["points"]
@@ -28,7 +31,7 @@ r = (points**2).sum(-1) ** 0.5
 ffat_map_NeuralSound = (
     ffat_map_NeuralSound / r[0] / 1.225 * (mesh_size / 0.15) ** (5 / 2)
 ) * 2
-index = 3
+index = 9
 from matplotlib.font_manager import FontProperties
 from matplotlib.image import imread
 from matplotlib.gridspec import GridSpec

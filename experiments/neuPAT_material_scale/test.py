@@ -23,8 +23,8 @@ from src.ffat_solve import monte_carlo_solve, bem_solve
 data_dir = sys.argv[1]
 
 
-def get_output_dir(size_scale, freq_scale):
-    dir_name = f"{data_dir}/{size_scale}_{freq_scale}"
+def get_output_dir(size_k, freq_k):
+    dir_name = f"{data_dir}/{size_k:.2f}_{freq_k:.2f}"
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     return dir_name
@@ -33,11 +33,12 @@ def get_output_dir(size_scale, freq_scale):
 def monte_carlo_process(vertices, ks, trg_points):
     timer = Timer()
     ffat_map, _ = monte_carlo_solve(
-        vertices, triangles, neumann_tri, ks, trg_points, 4000
+        vertices, triangles, neumann_tri, ks, trg_points, 5000
     )
     cost_time = timer.get_time()
+    print(ffat_map.max(), ffat_map.min())
     np.savez(
-        f"{get_output_dir(size_scale, freq_scale)}/ours.npz",
+        f"{get_output_dir(size_k, freq_k)}/ours.npz",
         ffat_map=np.abs(ffat_map),
         cost_time=cost_time,
     )
@@ -48,9 +49,14 @@ def bem_process(vertices, ks, trg_points):
     ffat_map = bem_solve(vertices, triangles, neumann_tri, ks, trg_points)
     cost_time = timer.get_time()
     np.savez(
-        f"{get_output_dir(size_scale, freq_scale)}/bem.npz",
+        f"{get_output_dir(size_k, freq_k)}/bem.npz",
+        vertices=vertices.cpu().numpy(),
+        triangles=triangles.cpu().numpy(),
+        neumann=neumann_tri.cpu().numpy(),
+        wave_number=-ks.cpu().numpy(),
         ffat_map=np.abs(ffat_map),
         cost_time=cost_time,
+        points=trg_points.cpu().numpy(),
     )
 
 
@@ -61,9 +67,10 @@ def calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos):
     x[:, 2:] = trg_pos
     timer = Timer()
     ffat_map = model(x).T
+    print(ffat_map.max(), ffat_map.min())
     cost_time = timer.get_time()
     np.savez(
-        f"{get_output_dir(size_scale, freq_scale)}/neuPAT.npz",
+        f"{get_output_dir(size_k, freq_k)}/neuPAT.npz",
         ffat_map=ffat_map.cpu().numpy(),
         cost_time=cost_time,
     )
@@ -73,10 +80,10 @@ import json
 import numpy as np
 
 
-with open(f"{data_dir}/config.json", "r") as file:
+with open(f"{data_dir}/../config.json", "r") as file:
     config_data = json.load(file)
 
-data = torch.load(f"{data_dir}/modal_data.pt")
+data = torch.load(f"{data_dir}/../modal_data.pt")
 vertices_base = data["vertices"]
 triangles = data["triangles"]
 neumann_tri = data["neumann_tri"]
@@ -118,20 +125,18 @@ first = True
 
 for size_scale in [0.0, 0.5, 1.0]:
     for freq_scale in [0.0, 0.5, 1.0]:
-        size_scale = torch.rand(1).cuda()
-        freq_scale = torch.rand(1).cuda()
         size_k = size_scale * (size_max - size_min) + size_min
         freq_k = freq_scale * (freq_max - freq_min) + freq_min
-        size_k = torch.exp(size_k)
-        freq_k = torch.exp(freq_k)
+        size_k = np.exp(size_k)
+        freq_k = np.exp(freq_k)
         vertices = vertices_base * size_k
         ks = ks_base * freq_k
-        trg_points = get_spherical_surface_points(vertices_base, 1.5)
+        trg_points = get_spherical_surface_points(vertices_base, 2)
         trg_pos = (trg_points - trg_pos_min) / (trg_pos_max - trg_pos_min)
         trg_points = trg_points * size_k
         if first:
             monte_carlo_process(vertices, ks, trg_points)
-            bem_process(vertices, ks, trg_points)
+            # bem_process(vertices, ks, trg_points)
             calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos)
             first = False
             sys.exit(0)

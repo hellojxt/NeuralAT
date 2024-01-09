@@ -259,7 +259,7 @@ ax.imshow(NeuralSound_ffat[0], cmap="viridis", vmin=vmin, vmax=vmax)
 ax.text(
     16,
     70,
-    f"{NeuralSoundSNR[0]:.2f} | {NeuralSoundSSIM[0]:.2f}",
+    f"{np.mean(NeuralSoundSNR):.2f} | {np.mean(NeuralSoundSSIM):.2f}",
     ha="center",
     fontproperties=my_font,
     fontsize=font_size,

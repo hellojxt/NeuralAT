@@ -37,7 +37,7 @@ def get_sampler(vertices, triangles, n):
     importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
     sampler = ImportanceSampler(vertices, triangles, importance, 50000)
     sampler.update()
-    sampler.poisson_disk_resample(r, 5)
+    sampler.poisson_disk_resample(r, 4)
     return sampler
 
 
@@ -78,7 +78,7 @@ def monte_carlo_solve(
     trg_points,
     n,
     tol=1e-6,
-    nsteps=100,
+    nsteps=500,
 ):
     sampler = get_sampler(vertices, triangles, n)
     print("sample points: ", sampler.num_samples)
@@ -86,6 +86,7 @@ def monte_carlo_solve(
     batch_step = 8
     mode_num = len(ks)
     ffat_map = torch.zeros(mode_num, len(trg_points), dtype=torch.complex64).cuda()
+    neumann_tri = neumann_tri * 1e4
     while idx < mode_num:
         ffat_map_batch, convergence = monte_carlo_sampler_solve(
             sampler,
@@ -99,7 +100,7 @@ def monte_carlo_solve(
             return None, False
         ffat_map[idx : idx + batch_step] = ffat_map_batch
         idx += batch_step
-    return ffat_map.cpu().numpy(), convergence
+    return ffat_map.cpu().numpy() * 1e-4, convergence
 
 
 def bem_solve(
@@ -113,7 +114,7 @@ def bem_solve(
 ):
     vertices = vertices.cpu().numpy()
     triangles = triangles.cpu().numpy()
-    neumann_tri = neumann_tri.cpu().numpy()
+    neumann_tri = neumann_tri.cpu().numpy() * 1e4
     ffat_map = np.zeros((len(ks), len(trg_points)), dtype=np.complex64)
     for i in range(len(ks)):
         k = ks[i].item()
@@ -121,4 +122,4 @@ def bem_solve(
         bem = BEMModel(vertices, triangles, k)
         bem.boundary_equation_solve(neumann_coeff, tol=tol, maxiter=nsteps)
         ffat_map[i] = bem.potential_solve(trg_points)
-    return ffat_map
+    return ffat_map * 1e-4

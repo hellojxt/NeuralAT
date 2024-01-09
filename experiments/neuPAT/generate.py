@@ -127,9 +127,12 @@ def calculate_ffat_map():
     ).cuda()
 
     while True:
-        ffat_map, convergence = monte_carlo_solve(
-            vertices, triangles, neumann_tri, ks, trg_points, 3500
-        )
+        try:
+            ffat_map, convergence = monte_carlo_solve(
+                vertices, triangles, neumann_tri, ks, trg_points, 4000
+            )
+        except RuntimeError:
+            continue
         if convergence:
             break
     ffat_map = torch.from_numpy(np.abs(ffat_map))

@@ -100,7 +100,6 @@ for i in tqdm(range(src_sample_num)):
         trg_pos = trg_pos.reshape(-1, 3)
 
         trg_points = get_spherical_surface_points(vertices, r)
-        trg_points = trg_points
         ffat_map, convergence = monte_carlo_process(vertices, ks, trg_points)
         if check_correct:
             ffat_map_bem = bem_process(vertices, ks, trg_points)

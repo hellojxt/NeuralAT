@@ -43,7 +43,7 @@ class MatSet:
         ]
         return Material(mat_lst[np.random.randint(0, len(mat_lst))])
 
-    def relative_freq_k():
+    def print_relative_freq_k():
         mat_lst = [
             MatSet.Ceramic,
             MatSet.Glass,
@@ -58,7 +58,14 @@ class MatSet:
         base = mat_lst[0][1] / mat_lst[0][0]
         for mat in mat_lst:
             lst.append((mat[1] / mat[0] / base) ** 0.5)
-        return lst
+        print("Ceramic:", lst[0])
+        print("Glass:", lst[1])
+        print("Wood:", lst[2])
+        print("Plastic:", lst[3])
+        print("Iron:", lst[4])
+        print("Polycarbonate:", lst[5])
+        print("Steel:", lst[6])
+        print("Tin:", lst[7])
 
 
 class Material(object):

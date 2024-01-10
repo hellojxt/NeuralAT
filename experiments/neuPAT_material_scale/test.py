@@ -33,7 +33,7 @@ def get_output_dir(size_k, freq_k):
 def monte_carlo_process(vertices, ks, trg_points):
     timer = Timer()
     ffat_map, _ = monte_carlo_solve(
-        vertices, triangles, neumann_tri, ks, trg_points, 5000
+        vertices, triangles, neumann_tri, ks, trg_points, 3000
     )
     cost_time = timer.get_time()
     print(ffat_map.max(), ffat_map.min())
@@ -86,27 +86,14 @@ with open(f"{data_dir}/../config.json", "r") as file:
 data = torch.load(f"{data_dir}/../modal_data.pt")
 vertices_base = data["vertices"]
 triangles = data["triangles"]
-neumann_tri = data["neumann_tri"]
-ks_base = data["ks"]
+neumann_tri = data["neumann_tri"][:8]
+ks_base = data["ks"][:8]
 mode_num = len(ks_base)
 
-trg_pos_min = torch.tensor(
-    config_data.get("solver", {}).get("trg_pos_min"), device="cuda", dtype=torch.float32
-)
-trg_pos_max = torch.tensor(
-    config_data.get("solver", {}).get("trg_pos_max"), device="cuda", dtype=torch.float32
-)
-size_scale_factor = config_data.get("solver", {}).get("size_scale_factor")
-size_max = np.log(size_scale_factor)
-size_min = -size_max
+size_min = np.log(config_data.get("solver", {}).get("size_scale_min"))
+size_max = np.log(config_data.get("solver", {}).get("size_scale_max"))
 freq_min = np.log(config_data.get("solver", {}).get("freq_scale_min"))
 freq_max = np.log(config_data.get("solver", {}).get("freq_scale_max"))
-print("trg_pos_min:", trg_pos_min)
-print("trg_pos_max:", trg_pos_max)
-trg_sample_num = config_data.get("solver", {}).get("trg_sample_num", 1000)
-src_sample_num = config_data.get("solver", {}).get("src_sample_num", 1000)
-print("trg_sample_num:", trg_sample_num)
-print("src_sample_num:", src_sample_num)
 
 with open(f"{data_dir}/net.json", "r") as file:
     train_config_data = json.load(file)
@@ -122,24 +109,39 @@ model.eval()
 torch.set_grad_enabled(False)
 
 first = True
+xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
+ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
+gridx, gridy = torch.meshgrid(xs, ys)
 
-for size_scale in [0.0, 0.5, 1.0]:
-    for freq_scale in [0.0, 0.5, 1.0]:
-        size_k = size_scale * (size_max - size_min) + size_min
-        freq_k = freq_scale * (freq_max - freq_min) + freq_min
-        size_k = np.exp(size_k)
-        freq_k = np.exp(freq_k)
-        vertices = vertices_base * size_k
-        ks = ks_base * freq_k
-        trg_points = get_spherical_surface_points(vertices_base, 2)
-        trg_pos = (trg_points - trg_pos_min) / (trg_pos_max - trg_pos_min)
-        trg_points = trg_points * size_k
-        if first:
-            monte_carlo_process(vertices, ks, trg_points)
-            # bem_process(vertices, ks, trg_points)
-            calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos)
-            first = False
-            sys.exit(0)
+for size_scale, freq_scale in [
+    (0.5, 0.4),
+    (0.5, 0.75),
+    (0.5, 1.0),
+    (0.7, 1.0),
+    (1.0, 1.0),
+]:
+    size_k = size_scale * (size_max - size_min) + size_min
+    freq_k = freq_scale * (freq_max - freq_min) + freq_min
+    size_k = np.exp(size_k)
+    freq_k = np.exp(freq_k)
+    print(size_k, freq_k)
+    vertices = vertices_base * size_k
+    ks = ks_base * freq_k / size_k
+    r_min = 1.5
+    r_max = 3.0
+    trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
+    r_scale = torch.rand(1).cuda()
+    r = (r_scale * (r_max - r_min) + r_min).item()
+    trg_pos[:, :, 0] = r_scale
+    trg_pos[:, :, 1] = gridx
+    trg_pos[:, :, 2] = gridy
+    trg_pos = trg_pos.reshape(-1, 3)
+    trg_points = get_spherical_surface_points(vertices, r)
+    if first:
         monte_carlo_process(vertices, ks, trg_points)
         bem_process(vertices, ks, trg_points)
         calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos)
+        first = False
+    monte_carlo_process(vertices, ks, trg_points)
+    bem_process(vertices, ks, trg_points)
+    calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos)

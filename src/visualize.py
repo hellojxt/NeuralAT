@@ -433,7 +433,9 @@ class CombinedFig:
     def __init__(self):
         self.fig = go.Figure()
 
-    def add_mesh(self, vertices, triangles, data=None, opacity=0.2):
+    def add_mesh(
+        self, vertices, triangles, data=None, opacity=0.2, cmax=None, cmin=None
+    ):
         vertices, triangles, data = [
             torch_to_numpy(x) for x in [vertices, triangles, data]
         ]
@@ -455,6 +457,10 @@ class CombinedFig:
                 )
             )
         else:
+            if cmax is None or cmin is None:
+                cmax = data.max()
+                cmin = data.min()
+            print("cmin = ", cmin, "cmax = ", cmax)
             self.fig.add_trace(
                 go.Mesh3d(
                     x=vertices[:, 0],

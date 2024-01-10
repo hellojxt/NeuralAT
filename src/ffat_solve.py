@@ -42,12 +42,7 @@ def get_sampler(vertices, triangles, n):
 
 
 def monte_carlo_sampler_solve(
-    sampler,
-    neumann_tri,
-    ks,
-    trg_points,
-    tol=1e-6,
-    nsteps=100,
+    sampler, neumann_tri, ks, trg_points, tol=1e-6, nsteps=100, plot=False
 ):
     G0_constructor = MonteCarloWeight(sampler.points, sampler)
     G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
@@ -62,6 +57,9 @@ def monte_carlo_sampler_solve(
     if not convergence:
         return None, False
     dirichlet = dirichlet.permute(2, 0, 1)
+    if plot:
+        CombinedFig().add_points(sampler.points, dirichlet[0].real).show()
+        CombinedFig().add_points(sampler.points, dirichlet[0].imag).show()
     G0_constructor = MonteCarloWeight(trg_points, sampler)
     G1_constructor = MonteCarloWeight(trg_points, sampler, deriv=True)
     G0 = G0_constructor.get_weights_potential_ks(ks)
@@ -79,6 +77,7 @@ def monte_carlo_solve(
     n,
     tol=1e-6,
     nsteps=500,
+    plot=False,
 ):
     sampler = get_sampler(vertices, triangles, n)
     print("sample points: ", sampler.num_samples)
@@ -95,6 +94,7 @@ def monte_carlo_solve(
             trg_points,
             tol=tol,
             nsteps=nsteps,
+            plot=plot and idx == 0,
         )
         if not convergence:
             return None, False
@@ -111,6 +111,7 @@ def bem_solve(
     trg_points,
     tol=1e-6,
     nsteps=2000,
+    plot=False,
 ):
     vertices = vertices.cpu().numpy()
     triangles = triangles.cpu().numpy()
@@ -122,4 +123,11 @@ def bem_solve(
         bem = BEMModel(vertices, triangles, k)
         bem.boundary_equation_solve(neumann_coeff, tol=tol, maxiter=nsteps)
         ffat_map[i] = bem.potential_solve(trg_points)
+        if i == 0 and plot:
+            CombinedFig().add_mesh(
+                vertices, triangles, bem.get_dirichlet_coeff().real, opacity=1.0
+            ).show()
+            CombinedFig().add_mesh(
+                vertices, triangles, bem.get_dirichlet_coeff().imag, opacity=1.0
+            ).show()
     return ffat_map * 1e-4

@@ -80,6 +80,10 @@ triangles_vib = data["triangles_vib"].cuda()
 vertices_static = data["vertices_static"].cuda()
 triangles_static = data["triangles_static"].cuda()
 neumann_tri = data["neumann_tri"].cuda()
+vertices_bem = data["vertices_bem"].cuda()
+triangles_bem = data["triangles_bem"].cuda()
+neumann_tri_bem = data["neumann_tri_bem"].cuda()
+
 ks = data["ks"].cuda()
 mode_num = len(ks)
 src_pos_min = torch.tensor(
@@ -104,20 +108,33 @@ src_sample_num = config_data.get("solver", {}).get("src_sample_num", 1000)
 print("trg_sample_num:", trg_sample_num)
 print("src_sample_num:", src_sample_num)
 
-x = torch.zeros(src_sample_num, trg_sample_num, 10, dtype=torch.float32)
-y = torch.zeros(src_sample_num, trg_sample_num, mode_num, dtype=torch.float32)
+x = torch.zeros(src_sample_num, 64 * 32, 10, dtype=torch.float32)
+y = torch.zeros(src_sample_num, 64 * 32, mode_num, dtype=torch.float32)
+xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
+ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
+gridx, gridy = torch.meshgrid(xs, ys)
+
+check_correct = True
 
 
 def calculate_ffat_map():
-    trg_pos = torch.rand(trg_sample_num, 3, device="cuda", dtype=torch.float32)
-    trg_points = trg_pos * (trg_pos_max - trg_pos_min) + trg_pos_min
+    r_min = 1.5
+    r_max = 3.0
+    trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
+    r_scale = torch.rand(1).cuda()
+    r = (r_scale * (r_max - r_min) + r_min).item()
+    trg_pos[:, :, 0] = r_scale
+    trg_pos[:, :, 1] = gridx
+    trg_pos[:, :, 2] = gridy
+    trg_pos = trg_pos.reshape(-1, 3)
+    trg_points = get_spherical_surface_points(vertices_vib, r)
     while True:
         src_rot = sample_uniform_quaternion()
         vertices_vib_updated = rotate_points(vertices_vib, src_rot)
         src_pos = torch.rand(3, device="cuda", dtype=torch.float32)
         displacement = src_pos * (src_pos_max - src_pos_min) + src_pos_min
         vertices_vib_updated = vertices_vib_updated + displacement
-        if vertices_vib_updated[:, 1].min() > 0.001:
+        if vertices_vib_updated[:, 1].min() > 0.01:
             trg_points = rotate_points(trg_points, src_rot)
             trg_points = trg_points + displacement
             break
@@ -128,28 +145,43 @@ def calculate_ffat_map():
 
     while True:
         ffat_map, convergence = monte_carlo_solve(
-            vertices, triangles, neumann_tri, ks, trg_points, 4000
+            vertices, triangles, neumann_tri, ks, trg_points, 6000, plot=False
         )
         if convergence:
             break
     ffat_map = torch.from_numpy(np.abs(ffat_map))
-    # ffat_map_bem = np.abs(bem_solve(vertices, triangles, neumann_tri, ks, trg_points))
-    # import matplotlib.pyplot as plt
-    # plt.subplot(121)
-    # plt.imshow(ffat_map[0].reshape(50, 20))
-    # plt.colorbar()
-    # plt.subplot(122)
-    # plt.imshow(ffat_map_bem[0].reshape(50, 20))
-    # plt.colorbar()
-    # plt.show()
+    if check_correct:
+        vertices = torch.cat([vertices_vib_updated, vertices_bem], dim=0).cuda()
+        triangles = torch.cat(
+            [triangles_vib, triangles_bem + len(vertices_vib)], dim=0
+        ).cuda()
+        print(vertices.shape, triangles.shape, neumann_tri_bem.shape, ks.shape)
+        ffat_map_bem = np.abs(
+            bem_solve(vertices, triangles, neumann_tri_bem, ks, trg_points, plot=False)
+        )
+        import matplotlib.pyplot as plt
+
+        for i in range(8):
+            v_min, v_max = np.min(np.abs(ffat_map_bem[i])), np.max(
+                np.abs(ffat_map_bem[i])
+            )
+            plt.subplot(2, 8, i + 1)
+            plt.imshow(np.abs(ffat_map[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
+            plt.colorbar()
+            plt.subplot(2, 8, i + 9)
+            plt.imshow(np.abs(ffat_map_bem[i]).reshape(64, 32), vmin=v_min, vmax=v_max)
+            plt.colorbar()
+        plt.savefig(f"{data_dir}/compare_{idx}.png")
+        plt.close()
+        CombinedFig().add_mesh(vertices, triangles).add_points(trg_points).show()
     return ffat_map, src_pos, trg_pos, src_rot
 
 
-for i in tqdm(range(src_sample_num)):
+for idx in tqdm(range(src_sample_num)):
     ffat_map, src_pos, trg_pos, src_rot = calculate_ffat_map()
-    x[i, :, :3] = src_pos.cpu()
-    x[i, :, 3:6] = trg_pos.cpu()
-    x[i, :, 6:10] = src_rot.cpu()
-    y[i] = ffat_map.T
+    x[idx, :, :3] = src_pos.cpu()
+    x[idx, :, 3:6] = trg_pos.cpu()
+    x[idx, :, 6:10] = src_rot.cpu()
+    y[idx] = ffat_map.T
 
 torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[1]}.pt")

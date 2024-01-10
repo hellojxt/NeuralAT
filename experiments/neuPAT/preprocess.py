@@ -47,7 +47,10 @@ def precompute_sample_points():
         size = obj.get("size")
         position = obj.get("position")
         obj_static = MeshObj(f"{data_dir}/{mesh}", scale=size)
+        mesh_bem = mesh.replace(".obj", "_bem.obj")
+        obj_static_bem = MeshObj(f"{data_dir}/{mesh_bem}", scale=size)
         obj_static.vertices = obj_static.vertices + position
+        obj_static_bem.vertices = obj_static_bem.vertices + position
 
     vertices_vib = torch.from_numpy(obj_vib.surf_vertices).cuda().to(torch.float32)
     triangles_vib = torch.from_numpy(obj_vib.surf_triangles).cuda().to(torch.int32)
@@ -67,14 +70,29 @@ def precompute_sample_points():
         mode_num, len(triangles_static), dtype=torch.complex64
     ).cuda()
 
-    neumann_tri = torch.cat([neumann_vib, neumann_static], dim=1).cuda()
+    vertices_bem = torch.from_numpy(obj_static_bem.vertices).cuda().to(torch.float32)
+    triangles_bem = torch.from_numpy(obj_static_bem.triangles).cuda().to(torch.int32)
+
+    neumann_static_bem = torch.zeros(
+        mode_num, len(triangles_bem), dtype=torch.complex64
+    ).cuda()
     ks = torch.from_numpy(-np.array(wave_number)).to(torch.float32).cuda()
+
+    neumann_tri = torch.cat([neumann_vib, neumann_static], dim=1).cuda()
     vertices = torch.cat([vertices_vib, vertices_static], dim=0).cuda()
     triangles = torch.cat(
         [triangles_vib, triangles_static + len(vertices_vib)], dim=0
     ).cuda()
-
     CombinedFig().add_mesh(vertices, triangles, neumann_tri[0].real, opacity=1.0).show()
+
+    neumann_tri_bem = torch.cat([neumann_vib, neumann_static_bem], dim=1).cuda()
+    vertices = torch.cat([vertices_vib, vertices_bem], dim=0).cuda()
+    triangles = torch.cat(
+        [triangles_vib, triangles_bem + len(vertices_vib)], dim=0
+    ).cuda()
+    CombinedFig().add_mesh(
+        vertices, triangles, neumann_tri_bem[0].real, opacity=1.0
+    ).show()
 
     torch.save(
         {
@@ -84,6 +102,9 @@ def precompute_sample_points():
             "triangles_static": triangles_static,
             "neumann_tri": neumann_tri,
             "ks": ks,
+            "vertices_bem": vertices_bem,
+            "triangles_bem": triangles_bem,
+            "neumann_tri_bem": neumann_tri_bem,
         },
         f"{data_dir}/modal_data.pt",
     )

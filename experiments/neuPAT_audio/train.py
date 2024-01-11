@@ -11,7 +11,7 @@ from src.timer import Timer
 import os
 
 data_dir = sys.argv[1]
-data_points_lst = glob(f"{data_dir}/../data_*.pt")
+data_points_lst = glob(f"{data_dir}/../data/*.pt")
 xs = []
 ys = []
 for data_points in data_points_lst:

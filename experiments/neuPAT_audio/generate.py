@@ -44,7 +44,7 @@ neumann_tri_static = torch.zeros(len(triangles_static), 1, dtype=torch.complex64
 neumann_tri_vib = torch.ones(len(triangles_vib), 1, dtype=torch.complex64).cuda()
 
 triangle_y = vertices_vib[triangles_vib][:, :, 1].mean(1)
-neumann_tri_vib[triangle_y > 0] = 0
+neumann_tri_vib[triangle_y > -0.04] = 0
 
 neumann_tri = torch.cat([neumann_tri_vib, neumann_tri_static], dim=0)
 triangles = torch.cat([triangles_vib, triangles_static + len(vertices_vib)], dim=0)
@@ -81,17 +81,6 @@ y = torch.zeros(src_sample_num, 64 * 32, 1, dtype=torch.float32)
 
 
 def calculate_ffat_map():
-    torch.save(
-        {
-            "vertices": vertices,
-            "triangles": triangles,
-            "neumann": neumann_tri.T,
-            "ks": ks_batch,
-            "trg_points": trg_points,
-            "sample_num": sample_num,
-        },
-        f"test.pt",
-    )
     return monte_carlo_solve(
         vertices,
         triangles,
@@ -192,6 +181,9 @@ for i in tqdm(range(src_sample_num)):
             ffat_map = np.abs(ffat_map)
             break
     if check_correct:
+        # CombinedFig().add_mesh(
+        #     vertices, triangles, neumann_tri.abs(), opacity=1.0
+        # ).show()
         ffat_map_bem = calculate_ffat_map_bem()
         snrs.append(SNR(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32)))
         ssims.append(
@@ -212,6 +204,7 @@ for i in tqdm(range(src_sample_num)):
         plt.title(f"snr: {snrs[-1]:.2f}, ssim: {ssims[-1]:.2f}")
         os.makedirs(f"{data_dir}/{displacement[1]:.2f}", exist_ok=True)
         plt.savefig(f"{data_dir}/{displacement[1]:.2f}/{i}.png")
+        plt.close()
 
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()

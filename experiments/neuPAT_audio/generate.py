@@ -81,6 +81,17 @@ y = torch.zeros(src_sample_num, 64 * 32, 1, dtype=torch.float32)
 
 
 def calculate_ffat_map():
+    torch.save(
+        {
+            "vertices": vertices,
+            "triangles": triangles,
+            "neumann": neumann_tri.T,
+            "ks": ks_batch,
+            "trg_points": trg_points,
+            "sample_num": sample_num,
+        },
+        f"test.pt",
+    )
     return monte_carlo_solve(
         vertices,
         triangles,

@@ -27,8 +27,8 @@ class Cell
         int phase_group_id;
 };
 
-#define HASH_BUCKET_SIZE 5
-#define HASH_TABLE_SIZE_FACTOR 4
+#define HASH_BUCKET_SIZE 16
+#define HASH_TABLE_SIZE_FACTOR 16
 class HashEntry
 {
     public:

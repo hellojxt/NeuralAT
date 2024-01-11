@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 
-obj_path = sys.argv[1]
+obj_path = "dataset/wob"
 poisson_gt = np.loadtxt(f"{obj_path}/poisson_gt.txt").reshape(256, 256)
 poisson_wob = np.loadtxt(f"{obj_path}/poisson_wob.txt").reshape(256, 256)
 poisson_ours = np.load(f"{obj_path}/poisson_ours.npy").reshape(256, 256)
@@ -104,7 +104,7 @@ ax.text(
 ax.text(
     0.5,
     -0.12,
-    "SNR | SSIM",
+    "SNR | SSIM | Cost Time (s)",
     transform=ax.transAxes,
     ha="center",
     fontproperties=my_font,

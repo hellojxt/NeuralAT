@@ -10,7 +10,7 @@ from src.cuda_imp import (
 from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
 from src.solver import BiCGSTAB_batch
 from src.ffat_solve import bem_solve, monte_carlo_solve
-from src.modalsound.model import get_spherical_surface_points
+from src.modalsound.model import get_spherical_surface_points, complex_ssim, SNR
 import numpy as np
 import os
 from glob import glob
@@ -42,6 +42,10 @@ vertices_static = sample_data["vertices_static"].cuda()
 triangles_static = sample_data["triangles_static"].cuda()
 neumann_tri_static = torch.zeros(len(triangles_static), 1, dtype=torch.complex64).cuda()
 neumann_tri_vib = torch.ones(len(triangles_vib), 1, dtype=torch.complex64).cuda()
+
+triangle_y = vertices_vib[triangles_vib][:, :, 1].mean(1)
+neumann_tri_vib[triangle_y > 0] = 0
+
 neumann_tri = torch.cat([neumann_tri_vib, neumann_tri_static], dim=0)
 triangles = torch.cat([triangles_vib, triangles_static + len(vertices_vib)], dim=0)
 
@@ -83,7 +87,7 @@ def calculate_ffat_map():
         neumann_tri.T,
         ks_batch,
         trg_points,
-        7000,
+        sample_num,
         plot=False,
     )
     # ffat_map = torch.zeros(trg_sample_num, 1, dtype=torch.complex64).cuda()
@@ -120,34 +124,36 @@ def calculate_ffat_map():
 
 
 def calculate_ffat_map_bem():
-    print(
-        vertices.shape,
-        triangles.shape,
-        neumann_tri.shape,
-        ks_batch.shape,
-        trg_points.shape,
-    )
     return np.abs(
         bem_solve(vertices, triangles, neumann_tri.T, ks_batch, trg_points, plot=False)
     )
 
 
 check_correct = False
-
+sample_num = 8000
+snrs = []
+ssims = []
 xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
 for i in tqdm(range(src_sample_num)):
     while True:
-        src_pos = torch.rand(3, device="cuda", dtype=torch.float32)
+        if check_correct:
+            src_pos = torch.tensor([0.5, 1.0, 0.5], device="cuda", dtype=torch.float32)
+        else:
+            src_pos = torch.rand(3, device="cuda", dtype=torch.float32)
+
         displacement = src_pos * (src_pos_max - src_pos_min) + src_pos_min
 
         vertices_vib_updated = vertices_vib + displacement
         vertices = torch.cat([vertices_vib_updated, vertices_static], dim=0)
         r_min = 2
         r_max = 4
+        if check_correct:
+            r_scale = torch.zeros(1).cuda()
+        else:
+            r_scale = torch.rand(1).cuda()
         trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
-        r_scale = torch.rand(1).cuda()
         r = (r_scale * (r_max - r_min) + r_min).item()
         trg_pos[:, :, 0] = r_scale
         trg_pos[:, :, 1] = gridx
@@ -159,8 +165,12 @@ for i in tqdm(range(src_sample_num)):
         normal_vib_updated = normal_vib
         points = torch.cat([points_vib_updated, points_static], dim=0)
         normals = torch.cat([normal_vib_updated, normal_static], dim=0)
-
-        freq_pos = torch.rand(1, device="cuda", dtype=torch.float32)
+        if check_correct:
+            freq_pos = torch.tensor(
+                [i / src_sample_num], device="cuda", dtype=torch.float32
+            )
+        else:
+            freq_pos = torch.rand(1, device="cuda", dtype=torch.float32)
         freq_log = freq_pos * (freq_max_log - freq_min_log) + freq_min_log
         freq = 10**freq_log
         k = 2 * np.pi * freq / 343.2
@@ -172,24 +182,33 @@ for i in tqdm(range(src_sample_num)):
             break
     if check_correct:
         ffat_map_bem = calculate_ffat_map_bem()
-        vmax = np.abs(ffat_map_bem).max()
-        vmin = np.abs(ffat_map_bem).min()
+        snrs.append(SNR(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32)))
+        ssims.append(
+            complex_ssim(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32))
+        )
+        ffat_map = np.log(ffat_map * 10e6 + 1)
+        ffat_map_bem = np.log(ffat_map_bem * 10e6 + 1)
+        vmax = 3
+        vmin = 1
         import matplotlib.pyplot as plt
 
-        # CombinedFig().add_points(points).add_points(trg_points).add_mesh(
-        #     vertices, triangles
-        # ).show()
         plt.subplot(121)
-        plt.imshow(ffat_map_bem.reshape(64, 32), vmin=vmin, vmax=vmax)
+        plt.imshow(ffat_map_bem.reshape(64, 32))
         plt.colorbar()
         plt.subplot(122)
-        plt.imshow(ffat_map.reshape(64, 32), vmin=vmin, vmax=vmax)
+        plt.imshow(ffat_map.reshape(64, 32))
         plt.colorbar()
-        plt.savefig(f"{data_dir}/{freq.item():.1f}.png")
+        plt.title(f"snr: {snrs[-1]:.2f}, ssim: {ssims[-1]:.2f}")
+        os.makedirs(f"{data_dir}/{displacement[1]:.2f}", exist_ok=True)
+        plt.savefig(f"{data_dir}/{displacement[1]:.2f}/{i}.png")
 
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()
     x[i, :, 6:] = freq_pos.cpu()
     y[i] = torch.from_numpy(ffat_map).T
 
-torch.save({"x": x, "y": y}, f"{data_dir}/data_{sys.argv[1]}.pt")
+if check_correct:
+    print("snr:", np.mean(snrs))
+    print("ssim:", np.mean(ssims))
+else:
+    torch.save({"x": x, "y": y}, f"{data_dir}/data/{sys.argv[1]}.pt")

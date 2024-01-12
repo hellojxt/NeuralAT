@@ -26,10 +26,10 @@ xs = torch.cat(xs, dim=0)
 ys = torch.cat(ys, dim=0)
 ys = ((ys + 10e-6) / 10e-6).log10()
 
-xs_train = xs[: int(len(xs) * 0.8)]
-ys_train = ys[: int(len(ys) * 0.8)]
-xs_test = xs[int(len(xs) * 0.8) :]
-ys_test = ys[int(len(ys) * 0.8) :]
+xs_train = xs[: int(len(xs) * 0.8)].cuda()
+ys_train = ys[: int(len(ys) * 0.8)].cuda()
+xs_test = xs[int(len(xs) * 0.8) :].cuda()
+ys_test = ys[int(len(ys) * 0.8) :].cuda()
 del xs, ys
 
 with open(f"{data_dir}/net.json", "r") as file:
@@ -58,12 +58,11 @@ max_epochs = train_params.get("max_epochs")
 test_step = train_params.get("test_step")
 for epoch_idx in tqdm(range(max_epochs)):
     # Create batches manually
-    if epoch_idx % 10 == 0:
-        indices = torch.randperm(xs_train.size(0))
+    indices = torch.randperm(xs_train.size(0), device="cuda")
 
-    for batch_idx in range(0, len(xs_train), batch_size):
-        x_batch = xs_train[indices[batch_idx : batch_idx + batch_size]].cuda()
-        y_batch = ys_train[indices[batch_idx : batch_idx + batch_size]].cuda()
+    for batch_idx in tqdm(range(0, len(xs_train), batch_size)):
+        x_batch = xs_train[indices[batch_idx : batch_idx + batch_size]]
+        y_batch = ys_train[indices[batch_idx : batch_idx + batch_size]]
 
         # Forward and backward passes
         y_pred = model(x_batch)
@@ -75,9 +74,9 @@ for epoch_idx in tqdm(range(max_epochs)):
 
     if epoch_idx % test_step == 0:
         loss_test = []
-        for batch_idx in range(0, len(xs_test), batch_size):
-            x_batch = xs_test[indices[batch_idx : batch_idx + batch_size]].cuda()
-            y_batch = ys_test[indices[batch_idx : batch_idx + batch_size]].cuda()
+        for batch_idx in tqdm(range(0, len(xs_test), batch_size)):
+            x_batch = xs_test[batch_idx : batch_idx + batch_size]
+            y_batch = ys_test[batch_idx : batch_idx + batch_size]
             y_pred = model(x_batch)
             loss = torch.nn.functional.mse_loss(y_pred, y_batch)
             loss_test.append(loss.item())

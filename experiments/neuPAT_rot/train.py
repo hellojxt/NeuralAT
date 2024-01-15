@@ -11,24 +11,22 @@ from src.timer import Timer
 import os
 
 data_dir = sys.argv[1]
-data_points_lst = glob(f"{data_dir}/../data/*.pt")
+data_points_lst = glob(f"{data_dir}/../data_*.pt")
 xs = []
 ys = []
-for data_points in data_points_lst:
+for data_points in data_points_lst[:2000]:
     data = torch.load(data_points)
-    x = data["x"].reshape(-1, 5)
-    y = data["y"].reshape(-1, 1)
-    xs.append(x)
-    ys.append(y)
+    xs.append(data["x"])
+    ys.append(data["y"])
 
-xs = torch.cat(xs, dim=0)
-ys = torch.cat(ys, dim=0)
+xs = torch.cat(xs, dim=0).reshape(-1, xs[0].shape[-1])
+ys = torch.cat(ys, dim=0).reshape(-1, ys[0].shape[-1])
 ys = ((ys + 10e-6) / 10e-6).log10()
 
-xs_train = xs[: int(len(xs) * 0.8)].cuda()
-ys_train = ys[: int(len(ys) * 0.8)].cuda()
-xs_test = xs[int(len(xs) * 0.8) :].cuda()
-ys_test = ys[int(len(ys) * 0.8) :].cuda()
+xs_train = xs[: int(len(xs) * 0.8)]
+ys_train = ys[: int(len(ys) * 0.8)]
+xs_test = xs[int(len(xs) * 0.8) :]
+ys_test = ys[int(len(ys) * 0.8) :]
 del xs, ys
 
 with open(f"{data_dir}/net.json", "r") as file:
@@ -53,16 +51,23 @@ scheduler = torch.optim.lr_scheduler.StepLR(
 )
 
 
+# Custom shuffle function that operates on the GPU
+def shuffle_tensors(x, y):
+    indices = torch.randperm(x.size(0))
+    return x[indices], y[indices]
+
+
 max_epochs = train_params.get("max_epochs")
 test_step = train_params.get("test_step")
 for epoch_idx in tqdm(range(max_epochs)):
     # Create batches manually
-    indices = torch.randperm(xs_train.size(0), device="cuda")
+    if epoch_idx % 10 == 0:
+        torch.cuda.empty_cache()
+        xs_train, ys_train = shuffle_tensors(xs_train, ys_train)
 
-    loss_train = []
-    for batch_idx in tqdm(range(0, len(xs_train), batch_size)):
-        x_batch = xs_train[indices[batch_idx : batch_idx + batch_size]]
-        y_batch = ys_train[indices[batch_idx : batch_idx + batch_size]]
+    for batch_idx in range(0, len(xs_train), batch_size):
+        x_batch = xs_train[batch_idx : batch_idx + batch_size].cuda()
+        y_batch = ys_train[batch_idx : batch_idx + batch_size].cuda()
 
         # Forward and backward passes
         y_pred = model(x_batch)
@@ -70,21 +75,19 @@ for epoch_idx in tqdm(range(max_epochs)):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        loss_train.append(loss.item())
-    loss_train = sum(loss_train) / len(loss_train)
-    print(f"epoch {epoch_idx}: train loss {loss_train}")
-    writer.add_scalar("loss_train", loss_train, epoch_idx)
+    writer.add_scalar("loss_train", loss.item(), epoch_idx)
 
     if epoch_idx % test_step == 0:
         loss_test = []
-        for batch_idx in tqdm(range(0, len(xs_test), batch_size)):
-            x_batch = xs_test[batch_idx : batch_idx + batch_size]
-            y_batch = ys_test[batch_idx : batch_idx + batch_size]
+        for batch_idx in range(0, len(xs_test), batch_size):
+            x_batch = xs_test[batch_idx : batch_idx + batch_size].cuda()
+            y_batch = ys_test[batch_idx : batch_idx + batch_size].cuda()
             y_pred = model(x_batch)
-            loss = torch.nn.functional.l1_loss(y_pred, y_batch)
+            loss = torch.nn.functional.mse_loss(y_pred, y_batch)
             loss_test.append(loss.item())
         loss_test = sum(loss_test) / len(loss_test)
         writer.add_scalar("loss_test", loss_test, epoch_idx)
-        print(f"epoch {epoch_idx}: test loss {loss_test}")
+
+    print(f"epoch {epoch_idx}: {loss.item()}")
 
 torch.save(model.state_dict(), f"{data_dir}/model.pt")

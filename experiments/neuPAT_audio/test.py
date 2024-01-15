@@ -19,24 +19,32 @@ from src.cuda_imp import (
 from src.solver import BiCGSTAB_batch
 from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
 from src.ffat_solve import monte_carlo_solve, bem_solve
+from src.audio import calculate_bin_frequencies
 
 data_dir = sys.argv[1]
 
 
 def get_output_dir(freq, src_pos_y):
-    dir_name = f"{data_dir}/{freq:.0f}_{src_pos_y:.1f}"
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
+    dir_name = f"{data_dir}/{src_pos_y:.1f}_{freq:.0f}"
+    os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
 
 def monte_carlo_process(vertices, ks, trg_points):
-    timer = Timer()
-    ffat_map, _ = monte_carlo_solve(
-        vertices, triangles, neumann_tri, ks, trg_points, 7000
-    )
-    cost_time = timer.get_time()
-    print(ffat_map.max(), ffat_map.min())
+    while True:
+        timer = Timer()
+        ffat_map, convergence = monte_carlo_solve(
+            vertices,
+            triangles,
+            neumann_tri.T,
+            ks_batch,
+            trg_points,
+            8000,
+            plot=False,
+        )
+        cost_time = timer.get_time()
+        if convergence:
+            break
     np.savez(
         f"{get_output_dir(freq, src_pos_y)}/ours.npz",
         ffat_map=np.abs(ffat_map),
@@ -46,7 +54,9 @@ def monte_carlo_process(vertices, ks, trg_points):
 
 def bem_process(vertices, ks, trg_points):
     timer = Timer()
-    ffat_map = bem_solve(vertices, triangles, neumann_tri, ks, trg_points)
+    ffat_map = bem_solve(
+        vertices, triangles, neumann_tri.T, ks_batch, trg_points, plot=False
+    )
     cost_time = timer.get_time()
     np.savez(
         f"{get_output_dir(freq, src_pos_y)}/bem.npz",
@@ -61,10 +71,10 @@ def bem_process(vertices, ks, trg_points):
 
 
 def calculate_ffat_map_neuPAT(src_pos, trg_pos, freq_pos):
-    x = torch.zeros(len(trg_points), 7, dtype=torch.float32, device="cuda")
-    x[:, :3] = src_pos
-    x[:, 3:6] = trg_pos
-    x[:, 6:] = freq_pos
+    x = torch.zeros(len(trg_points), 5, dtype=torch.float32, device="cuda")
+    x[:, :1] = src_pos[1]
+    x[:, 1:4] = trg_pos
+    x[:, 4:] = freq_pos
     timer = Timer()
     ffat_map = model(x).T
     cost_time = timer.get_time()
@@ -96,7 +106,11 @@ vertices_static = sample_data["vertices_static"].cuda()
 triangles_static = sample_data["triangles_static"].cuda()
 neumann_tri_static = torch.zeros(len(triangles_static), 1, dtype=torch.complex64).cuda()
 neumann_tri_vib = torch.ones(len(triangles_vib), 1, dtype=torch.complex64).cuda()
-neumann_tri = torch.cat([neumann_tri_vib, neumann_tri_static], dim=0).T
+
+triangle_y = vertices_vib[triangles_vib][:, :, 1].mean(1)
+neumann_tri_vib[triangle_y > -0.04] = 0
+
+neumann_tri = torch.cat([neumann_tri_vib, neumann_tri_static], dim=0)
 triangles = torch.cat([triangles_vib, triangles_static + len(vertices_vib)], dim=0)
 
 src_pos_min = torch.tensor(
@@ -138,8 +152,15 @@ xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
 
-for freq_pos in [0.2, 0.4, 0.6, 0.8, 1.0]:
-    for src_pos_y in [0.3, 0.4, 0.5, 0.6, 0.7]:
+freq_bins = calculate_bin_frequencies()
+print("freq_bins:", freq_bins)
+for src_pos_y in range(0, 10):
+    src_pos_y = src_pos_y / 10
+    print("src_pos_y:", src_pos_y)
+    for freq_bin in freq_bins:
+        if freq_bin < freq_min or freq_bin > freq_max:
+            continue
+        freq_pos = (np.log10(freq_bin) - freq_min_log) / (freq_max_log - freq_min_log)
         src_pos = torch.zeros(3, device="cuda", dtype=torch.float32)
         src_pos[1] = src_pos_y
         displacement = src_pos * (src_pos_max - src_pos_min) + src_pos_min
@@ -148,7 +169,7 @@ for freq_pos in [0.2, 0.4, 0.6, 0.8, 1.0]:
         r_min = 2
         r_max = 4
         trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
-        r_scale = torch.zeros(1).cuda()
+        r_scale = torch.ones(1).cuda() * 0.5
         r = (r_scale * (r_max - r_min) + r_min).item()
         trg_pos[:, :, 0] = r_scale
         trg_pos[:, :, 1] = gridx

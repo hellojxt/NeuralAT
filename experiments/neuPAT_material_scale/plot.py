@@ -42,6 +42,8 @@ while ind1 == ind2:
     ind2 = np.random.randint(0, max_ind)
 if ind1 > ind2:
     ind1, ind2 = ind2, ind1
+ind1 = 1
+ind2 = 6
 index = ind1
 from matplotlib.font_manager import FontProperties
 from matplotlib.image import imread
@@ -152,7 +154,7 @@ ax.text(
     fontsize=font_size,
 )
 if len(sys.argv) > 2:
-    plt.title("Ours", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 plt.axis("off")
 
 SNRs = []
@@ -176,7 +178,7 @@ ax.text(
     fontsize=font_size,
 )
 if len(sys.argv) > 2:
-    plt.title("neuPAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("MCAT+NC", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 plt.axis("off")
 
 SNRs = []
@@ -236,7 +238,7 @@ ax.text(
     fontsize=font_size,
 )
 if len(sys.argv) > 2:
-    plt.title("Ours", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 plt.axis("off")
 
 # Add text below the image
@@ -256,7 +258,7 @@ ax.text(
 )
 
 if len(sys.argv) > 2:
-    plt.title("neuPAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("MCAT+NC", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 
 plt.axis("off")
 

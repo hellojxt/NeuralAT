@@ -60,6 +60,7 @@ for epoch_idx in tqdm(range(max_epochs)):
     # Create batches manually
     indices = torch.randperm(xs_train.size(0), device="cuda")
 
+    loss_train = []
     for batch_idx in tqdm(range(0, len(xs_train), batch_size)):
         x_batch = xs_train[indices[batch_idx : batch_idx + batch_size]]
         y_batch = ys_train[indices[batch_idx : batch_idx + batch_size]]
@@ -70,7 +71,10 @@ for epoch_idx in tqdm(range(max_epochs)):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    writer.add_scalar("loss_train", loss.item(), epoch_idx)
+        loss_train.append(loss.item())
+    loss_train = sum(loss_train) / len(loss_train)
+    print(f"epoch {epoch_idx}: train loss {loss_train}")
+    writer.add_scalar("loss_train", loss_train, epoch_idx)
 
     if epoch_idx % test_step == 0:
         loss_test = []
@@ -78,11 +82,10 @@ for epoch_idx in tqdm(range(max_epochs)):
             x_batch = xs_test[batch_idx : batch_idx + batch_size]
             y_batch = ys_test[batch_idx : batch_idx + batch_size]
             y_pred = model(x_batch)
-            loss = torch.nn.functional.mse_loss(y_pred, y_batch)
+            loss = torch.nn.functional.l1_loss(y_pred, y_batch)
             loss_test.append(loss.item())
         loss_test = sum(loss_test) / len(loss_test)
         writer.add_scalar("loss_test", loss_test, epoch_idx)
-
-    print(f"epoch {epoch_idx}: {loss.item()}")
+        print(f"epoch {epoch_idx}: test loss {loss_test}")
 
 torch.save(model.state_dict(), f"{data_dir}/model.pt")

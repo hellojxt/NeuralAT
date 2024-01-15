@@ -48,7 +48,9 @@ def monte_carlo_sampler_solve(
     G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
     G0_batch = G0_constructor.get_weights_boundary_ks(ks)
     G1_batch = G1_constructor.get_weights_boundary_ks(ks)
+    # print(neumann_tri.shape)
     neumann = neumann_tri[:, sampler.points_index].unsqueeze(-1)
+    # print(G0_batch.shape, G1_batch.shape, neumann.shape)
     b_batch = torch.bmm(G0_batch, neumann).permute(1, 2, 0)
     solver = BiCGSTAB_batch(
         lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)

@@ -38,13 +38,20 @@ vertices_rot = data["vertices_rot"].cuda()
 triangles_rot = data["triangles_rot"].cuda()
 triangles = torch.cat([triangles_static, triangles_rot + len(vertices_static)], dim=0)
 neumann_tri = data["neumann_tri"].cuda().reshape(1, -1)
-
 rot_pos = torch.tensor(
     config_data.get("solver", {}).get("rot_pos"), device="cuda", dtype=torch.float32
 )
 rot_axis = config_data.get("solver", {}).get("rot_axis")
 rot_max_degree = config_data.get("solver", {}).get("rot_max_degree")
 src_sample_num = config_data.get("solver", {}).get("src_sample_num", 1000)
+
+mesh_static_size = (vertices_static.max(dim=0)[0] - vertices_static.min(dim=0)[0]).max()
+mesh_rot_size = (vertices_rot.max(dim=0)[0] - vertices_rot.min(dim=0)[0]).max()
+
+if mesh_static_size > mesh_rot_size:
+    ffat_base_mesh = vertices_static
+else:
+    ffat_base_mesh = vertices_rot
 
 vertices_rot -= rot_pos
 
@@ -54,6 +61,8 @@ freq_min_log = np.log10(freq_min)
 freq_max_log = np.log10(freq_max)
 print("freq_min:", freq_min)
 print("freq_max:", freq_max)
+r_min = config_data.get("solver", {}).get("r_min", 3)
+r_max = config_data.get("solver", {}).get("r_max", 4)
 
 
 def calculate_ffat_map():
@@ -85,7 +94,7 @@ y = torch.zeros(src_sample_num, 64 * 32, 1, dtype=torch.float32)
 xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
-check_correct = False
+check_correct = True
 
 for i in tqdm(range(src_sample_num)):
     while True:
@@ -97,8 +106,6 @@ for i in tqdm(range(src_sample_num)):
         vertices = (
             torch.cat([vertices_static, vertices_rot_updated], dim=0).float().cuda()
         )
-        r_min = 3
-        r_max = 4
         r_scale = torch.rand(1).cuda()
         trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
         r = (r_scale * (r_max - r_min) + r_min).item()
@@ -106,7 +113,7 @@ for i in tqdm(range(src_sample_num)):
         trg_pos[:, :, 1] = gridx
         trg_pos[:, :, 2] = gridy
         trg_pos = trg_pos.reshape(-1, 3)
-        trg_points = get_spherical_surface_points(vertices_static, r)
+        trg_points = get_spherical_surface_points(ffat_base_mesh, r)
 
         freq_pos = torch.rand(1, device="cuda", dtype=torch.float32)
         freq_log = freq_pos * (freq_max_log - freq_min_log) + freq_min_log
@@ -126,6 +133,7 @@ for i in tqdm(range(src_sample_num)):
             vertices, triangles, neumann_tri[0].abs(), opacity=1.0
         ).show()
         plt.imshow(ffat_map.reshape(64, 32))
+        plt.colorbar()
         plt.savefig(f"{data_dir}/figs/{i}.png")
         plt.close()
 

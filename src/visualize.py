@@ -481,7 +481,14 @@ class CombinedFig:
         return self
 
     def add_points(
-        self, coords, data=None, point_size=5, showscale=True, cmax=None, cmin=None
+        self,
+        coords,
+        data=None,
+        point_size=5,
+        showscale=True,
+        cmax=None,
+        cmin=None,
+        opacity=1.0,
     ):
         coords, data = [torch_to_numpy(x) for x in [coords, data]]
         if data is None:
@@ -504,7 +511,7 @@ class CombinedFig:
                     size=point_size,
                     color=data,
                     colorscale="Viridis",  # choose a colorscale
-                    opacity=1.0,
+                    opacity=opacity,
                     cmax=cmax,
                     cmin=cmin,
                     colorbar=dict(title="") if showscale else None,

@@ -51,6 +51,7 @@ struct Grids
             }
         }
         HOST_DEVICE inline PitchedPtr<T, 3> &operator[](int i) { return data[(i + HISTORY) % HISTORY]; }
+        HOST_DEVICE inline const PitchedPtr<T, 3> &operator[](int i) const { return data[(i + HISTORY) % HISTORY]; }
 };
 
 __device__ inline float get_damp(int3 coord, FDTDConfig &fdtd)
@@ -134,20 +135,29 @@ __device__ inline void rasterize_obj(PitchedPtr<FDTDCell, 3> cells,
     float3 cell_center =
         make_float3(fdtd.min_bound.x + (coord.x + 0.5f) * fdtd.dl, fdtd.min_bound.y + (coord.y + 0.5f) * fdtd.dl,
                     fdtd.min_bound.z + (coord.z + 0.5f) * fdtd.dl);
+    const auto nearest = lbvh::query_device(bvh, lbvh::nearest(cell_center), distance_sq_calculator());
     float4 origin = make_float4(cell_center);
     float4 dir;
-    float phi = 2.f * M_PI * curand_uniform(&rand_states(coord));
-    dir.w = 0.f;
-    dir.z = 2.f * curand_uniform(&rand_states(coord)) - 1.f;
-    dir.x = sqrtf(1.f - dir.z * dir.z) * cosf(phi);
-    dir.y = sqrtf(1.f - dir.z * dir.z) * sinf(phi);
-    lbvh::Line<float, 3> line(origin, dir);
-    constexpr uint buffer_size = 8;
-    thrust::pair<uint, int> buffer[buffer_size];
-    auto num_intersections = lbvh::query_device(bvh, lbvh::query_line_intersect<float, 3>(line), LineElementIntersect(),
-                                                buffer, buffer_size);
-    const auto nearest = lbvh::query_device(bvh, lbvh::nearest(cell_center), distance_sq_calculator());
-    cells(coord).is_solid = (num_intersections % 2 == 1);
+    int num_odd = 0;
+    int num_even = 0;
+    for (int test_i = 0; test_i < 16; test_i++)
+    {
+        float phi = 2.f * M_PI * curand_uniform(&rand_states(coord));
+        dir.w = 0.f;
+        dir.z = 2.f * curand_uniform(&rand_states(coord)) - 1.f;
+        dir.x = sqrtf(1.f - dir.z * dir.z) * cosf(phi);
+        dir.y = sqrtf(1.f - dir.z * dir.z) * sinf(phi);
+        lbvh::Line<float, 3> line(origin, dir);
+        constexpr uint buffer_size = 8;
+        thrust::pair<uint, int> buffer[buffer_size];
+        auto num_intersections = lbvh::query_device(bvh, lbvh::query_line_intersect<float, 3>(line),
+                                                    LineElementIntersect(), buffer, buffer_size);
+        if (num_intersections % 2 == 1)
+            num_odd++;
+        else
+            num_even++;
+    }
+    cells(coord).is_solid = num_odd > num_even ? 1 : 0;
     // cells(coord).is_solid = num_intersections;
     cells(coord).is_ghost = false;
     cells(coord).nearst_face_id = nearest.first;
@@ -175,7 +185,6 @@ __device__ inline void mark_ghost_cell(PitchedPtr<FDTDCell, 3> cells, int x, int
 
 __device__ inline void update_ghost_cell(PitchedPtr<FDTDCell, 3> cells,
                                          Grids<float> grids,
-                                         PitchedPtr<float, 3> accumulate_grids,
                                          FDTDConfig fdtd,
                                          Element *triangles,
                                          PitchedPtr<float, 2> triangles_neumann,
@@ -187,14 +196,6 @@ __device__ inline void update_ghost_cell(PitchedPtr<FDTDCell, 3> cells,
     if (x >= cells.size[0] || y >= cells.size[1] || z >= cells.size[2])
         return;
     int3 coord = make_int3(x, y, z);
-    if (cells(coord).is_solid)
-    {
-        accumulate_grids(coord) = 0;
-    }
-    else
-    {
-        accumulate_grids(coord) = max(abs(grids[t + 1](coord)), accumulate_grids(coord));
-    }
     if (cells(coord).is_solid && !cells(coord).is_ghost)
     {
         grids[t + 1](coord) = 0;

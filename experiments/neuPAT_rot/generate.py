@@ -94,7 +94,7 @@ y = torch.zeros(src_sample_num, 64 * 32, 1, dtype=torch.float32)
 xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
-check_correct = True
+check_correct = False
 
 for i in tqdm(range(src_sample_num)):
     while True:

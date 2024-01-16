@@ -319,17 +319,19 @@ def fast_sparse_matrix_vector_mul2(col_indices, values, x):
 
 
 class FDTDSimulator:
-    def __init__(self, min_bound, max_bound, bound_size, res):
+    def __init__(self, min_bound, max_bound, bound_size, res, listen_pos):
         self.min_bound = min_bound
         self.max_bound = max_bound
         self.bound_size = bound_size
         self.grid_size = bound_size / res
         self.res = res
         self.dt = self.grid_size / 3**0.5 / 343.0 / 1.01
-        self.grids, self.pml_grids, self.cells, self.accumulate_grids = CUDA_MODULE.get(
-            "allocate_grids_data"
-        )(res)
-        self.time_idx = 0
+        self.sample_rate = int(1 / self.dt)
+        self.dt = 1 / self.sample_rate
+        self.grids, self.pml_grids, self.cells = CUDA_MODULE.get("allocate_grids_data")(
+            res
+        )
+        self.listen_pos = listen_pos
 
     def get_mgrid_xyz(self):
         x = torch.linspace(
@@ -352,7 +354,19 @@ class FDTDSimulator:
         )
         return torch.meshgrid(x, y, z, indexing="ij")
 
-    def update(self, vertices, triangles, triangles_neumann, need_rasterize=True):
+    def grid_points(self):
+        xs, ys, zs = self.get_mgrid_xyz()
+        points = torch.stack([xs.flatten(), ys.flatten(), zs.flatten()], dim=1)
+        return points.reshape(self.res, self.res, self.res, 3)
+
+    def update(
+        self,
+        vertices,
+        triangles,
+        triangles_neumann,
+    ):
+        step_num = triangles_neumann.shape[1]
+        signal = torch.zeros(step_num, dtype=torch.float32, device="cuda")
         CUDA_MODULE.get("FDTD_simulation")(
             vertices,
             triangles,
@@ -362,10 +376,16 @@ class FDTDSimulator:
             self.grids,
             self.pml_grids,
             self.cells,
-            self.accumulate_grids,
+            signal,
+            self.listen_pos,
             self.dt,
             self.res,
-            self.time_idx,
-            need_rasterize,
+            0,
         )
-        self.time_idx += triangles_neumann.shape[1]
+        return signal
+
+    def reset_grid(self):
+        self.time_idx = 0
+        self.grids.zero_()
+        self.pml_grids.zero_()
+        self.cells.zero_()

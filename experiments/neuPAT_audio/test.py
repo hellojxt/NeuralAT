@@ -183,10 +183,10 @@ for src_pos_y in range(0, 10):
 
         ks_batch = torch.tensor([-k], dtype=torch.float32).cuda()
         if first:
-            monte_carlo_process(vertices, ks_batch, trg_points)
-            bem_process(vertices, ks_batch, trg_points)
+            # monte_carlo_process(vertices, ks_batch, trg_points)
+            # bem_process(vertices, ks_batch, trg_points)
             calculate_ffat_map_neuPAT(src_pos, trg_pos, freq_pos)
             first = False
-        monte_carlo_process(vertices, ks_batch, trg_points)
-        bem_process(vertices, ks_batch, trg_points)
+        # monte_carlo_process(vertices, ks_batch, trg_points)
+        # bem_process(vertices, ks_batch, trg_points)
         calculate_ffat_map_neuPAT(src_pos, trg_pos, freq_pos)

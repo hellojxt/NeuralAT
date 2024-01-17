@@ -490,6 +490,7 @@ class CombinedFig:
         cmin=None,
         opacity=1.0,
     ):
+        coords = coords.reshape(-1, 3)
         coords, data = [torch_to_numpy(x) for x in [coords, data]]
         if data is None:
             data = np.ones(len(coords))

@@ -93,7 +93,7 @@ freq_bins = calculate_bin_frequencies()
 print("freq_bins:", freq_bins)
 
 check_correctness = False
-move_step_num = 100
+move_step_num = 10
 nc_cost_time = 0
 r_min = 2
 r_max = 4
@@ -123,18 +123,66 @@ for src_pos_i in tqdm(range(0, move_step_num)):
     src_pos_y = src_pos_i / move_step_num
     src_pos[src_pos_i] = src_pos_y
 
-x = torch.zeros(len(src_pos), len(freq_pos), 5, dtype=torch.float32, device="cuda")
-x[:, :, 0] = src_pos
-x[:, :, 1:4] = trg_pos
-x[:, :, 4] = freq_pos.reshape(1, -1)
-nc_value = model(x.reshape(-1, 5)).reshape(len(src_pos), len(freq_pos))
-timer = Timer()
-nc_spec = model(x.reshape(-1, 5)).reshape(len(src_pos), len(freq_pos))
-nc_spec = nc_spec.cpu().numpy()
-nc_cost_time = timer.get_time()
+
+def run_neual_cache():
+    x = torch.zeros(len(src_pos), len(freq_pos), 5, dtype=torch.float32, device="cuda")
+    x[:, :, 0] = src_pos
+    x[:, :, 1:4] = trg_pos
+    x[:, :, 4] = freq_pos.reshape(1, -1)
+    nc_value = model(x.reshape(-1, 5)).reshape(len(src_pos), len(freq_pos))
+    timer = Timer()
+    nc_spec = model(x.reshape(-1, 5)).reshape(len(src_pos), len(freq_pos))
+    nc_spec = nc_spec.cpu().numpy()
+    nc_cost_time = timer.get_time()
+    return nc_spec, nc_cost_time
+
+
+nc_spec, nc_cost_time = run_neual_cache()
+print(nc_cost_time)
 import torchaudio
 
 get_spectrogram = torchaudio.transforms.Spectrogram(n_fft=128, power=2.0).cuda()
+
+import librosa
+
+signal_resampleds = []
+
+resolution = int(sys.argv[1])
+
+
+def run_fdtd():
+    min_bound, max_bound, bound_size = get_bound_info(vertices_static, padding=4)
+    fdtd = FDTDSimulator(
+        min_bound, max_bound, bound_size, resolution, trg_points.reshape(-1)
+    )
+    batch_size = 2000
+    # print(0.1 / fdtd.dt /   batch_size)
+    ts = torch.arange(batch_size, device="cuda", dtype=torch.float32) * fdtd.dt
+    neumann_signal = torch.zeros(batch_size, device="cuda", dtype=torch.float32)
+    for freq in freq_bins:
+        neumann_signal += (
+            torch.sin(2 * np.pi * freq * ts + torch.rand(1).item() * 2 * np.pi)
+            + torch.sin(2 * np.pi * freq * ts + torch.rand(1).item() * 2 * np.pi)
+            + torch.sin(2 * np.pi * freq * ts + torch.rand(1).item() * 2 * np.pi)
+        ) / 3
+    # plt.plot(neumann_signal.cpu().numpy())
+    # plt.savefig(f"{data_dir}/neumann_signal.png")
+    # plt.close()
+    neumann_surf = neumann_tri.reshape(-1, 1) * neumann_signal.reshape(1, -1)
+    signal = fdtd.update(vertices, triangles, neumann_surf)
+    # print(signal.max(), signal.min())
+    # plt.plot(signal.cpu().numpy())
+    # plt.savefig(f"{data_dir}/signal.png")
+    # plt.close()
+    signal_resampled = librosa.resample(
+        signal.cpu().numpy(), orig_sr=fdtd.sample_rate, target_sr=16000
+    )
+    # plt.plot(signal_resampled)
+    # plt.savefig(f"{data_dir}/signal_resampled.png")
+    # plt.close()
+    signal_resampled = torch.from_numpy(signal_resampled).cuda()
+    signal_resampleds.append(signal_resampled)
+
 
 fdtd_spec = np.zeros((move_step_num, len(freq_bins)))
 fdtd_cost_time = 0
@@ -146,46 +194,21 @@ for src_pos_i in tqdm(range(0, move_step_num)):
     vertices_vib_updated = vertices_vib + displacement
     vertices = torch.cat([vertices_vib_updated, vertices_static], dim=0)
     timer = Timer()
-    min_bound, max_bound, bound_size = get_bound_info(vertices_static, padding=4)
-    fdtd = FDTDSimulator(min_bound, max_bound, bound_size, 90, trg_points.reshape(-1))
-    batch_size = 1000
-    signal = torch.zeros(batch_size, device="cuda", dtype=torch.float32)
-    ts = torch.arange(batch_size, device="cuda", dtype=torch.float32) * fdtd.dt
-    neumann_signal = torch.zeros(batch_size, device="cuda", dtype=torch.float32)
-    for freq in freq_bins:
-        neumann_signal += torch.sin(
-            2 * np.pi * freq * ts + torch.rand(1).item() * 2 * np.pi
-        )
-    plt.plot(neumann_signal.cpu().numpy())
-    plt.savefig(f"{data_dir}/neumann_signal.png")
-    plt.close()
-    neumann_surf = neumann_tri.reshape(-1, 1) * neumann_signal
-    batch_signal = fdtd.update(vertices, triangles, neumann_surf)
-    signal = signal[batch_size // 2 :]
-    plt.plot(signal.cpu().numpy())
-    plt.savefig(f"{data_dir}/signal.png")
-    plt.close()
-    print(fdtd.sample_rate)
-    signal_resampled = torchaudio.transforms.Resample(fdtd.sample_rate, 16000).cuda()(
-        signal
-    )
-    spec = get_spectrogram(signal_resampled)
-    spec = spec.log10().mean(1).cpu().numpy()
-    plt.imshow(spec.reshape(-1, 1))
-    plt.savefig(f"{data_dir}/fdtd_spec.png")
-    plt.close()
-    fdtd_spec[src_pos_i] = spec
+    run_fdtd()
+    # spec = run_fdtd()
+    # fdtd_spec[src_pos_i] = spec
     fdtd_cost_time += timer.get_time()
-    torch.cuda.empty_cache()
 
-print("nc_cost_time:", nc_cost_time)
-print("fdtd_cost_time:", fdtd_cost_time)
-
-plt.subplot(211)
-plt.imshow(nc_spec)
-plt.subplot(212)
-plt.imshow(fdtd_spec)
-plt.show()
-plt.close()
-np.save(f"{data_dir}/nc_spec.npy", nc_spec)
-np.save(f"{data_dir}/fdtd_spec.npy", fdtd_spec)
+# plt.subplot(211)
+# plt.imshow(nc_spec)
+# plt.subplot(212)
+# plt.imshow(fdtd_spec)
+# plt.savefig(f"{data_dir}/fdtd_nc_spec_comp.png")
+# plt.close()
+torch.save(
+    {
+        "cost_time": fdtd_cost_time,
+        "signal_resampleds": signal_resampleds,
+    },
+    f"{data_dir}/fdtd_{resolution}.pt",
+)

@@ -21,19 +21,13 @@ from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
 from src.ffat_solve import monte_carlo_solve, bem_solve
 from src.audio import calculate_bin_frequencies
 
-data_dir = "dataset/NeuPAT/shape"
+data_dir = sys.argv[1]
 
 import json
 import numpy as np
 
 with open(f"{data_dir}/config.json", "r") as file:
     config_data = json.load(file)
-
-data = torch.load(f"{data_dir}/data.pt")
-vib_vertices = data["vib_vertices"].cuda()
-vib_triangles = data["vib_triangles"].cuda()
-vertices_lst = data["vertices_lst"]
-triangles_lst = data["triangles_lst"]
 
 freq_min = config_data.get("solver", {}).get("freq_min", 100)
 freq_max = config_data.get("solver", {}).get("freq_max", 10000)
@@ -58,7 +52,8 @@ xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
 
-trg_x, trg_y = 0, 16
+# trg_x, trg_y = 29, 16
+trg_x, trg_y = 0, 0
 
 freq_bins = calculate_bin_frequencies(256)
 print("freq_bins:", freq_bins)
@@ -67,12 +62,13 @@ nc_cost_time = 0
 r_min = 2
 r_max = 4
 trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
-r_scale = torch.ones(1).cuda() * 0.5
+r_scale = torch.ones(1).cuda() * 0
 r = (r_scale * (r_max - r_min) + r_min).item()
 trg_pos[:, :, 0] = r_scale
 trg_pos[:, :, 1] = gridx
 trg_pos[:, :, 2] = gridy
 trg_pos = trg_pos[trg_x, trg_y].reshape(3)
+
 
 freq_pos = torch.zeros(len(freq_bins), device="cuda", dtype=torch.float32)
 for freq_i in tqdm(range(len(freq_bins))):
@@ -83,10 +79,10 @@ for freq_i in tqdm(range(len(freq_bins))):
         freq_max_log - freq_min_log
     )
 
-mesh_num = len(vertices_lst)
-src_pos = torch.zeros(mesh_num, 1, device="cuda", dtype=torch.float32)
-for src_pos_i in tqdm(range(0, mesh_num)):
-    src_pos[src_pos_i] = src_pos_i / mesh_num
+src_num = 200
+src_pos = torch.zeros(src_num, 1, device="cuda", dtype=torch.float32)
+for src_pos_i in tqdm(range(0, src_num)):
+    src_pos[src_pos_i] = src_pos_i / src_num
 
 
 def run_neual_cache():

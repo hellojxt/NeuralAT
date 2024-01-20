@@ -144,17 +144,18 @@ font_size = 25
 
 # Define the number of ticks you want to show on each axis
 num_y_ticks = 8  # for example
-num_x_ticks = 2  # for example
+num_x_ticks = 3  # for example
 x_start = 0
-x_end = 2 * len(y_list)
+x_end = 0.3
 # Create figure
 fig = plt.figure(figsize=(16, 8))
 gs = GridSpec(1, 7, width_ratios=[1, 1, 1, 1, 1, 1, 1])
 
 for i in range(7):
     ax = plt.subplot(gs[i])
+    img = spectrogram[:, ::-1, i].T
     ax.imshow(
-        np.abs(spectrogram[:, :, i].T),
+        np.abs(img),
         cmap="viridis",
         vmin=vmin,
         vmax=vmax,

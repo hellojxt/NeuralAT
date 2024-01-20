@@ -257,9 +257,16 @@ inline void parallel_for_3D(size_t n_elements_x, size_t n_elements_y, size_t n_e
     parallel_for_3D(0, n_elements_x, n_elements_y, n_elements_z, std::forward<F>(fun));
 }
 
+#include <vector>
+#include <random>
+#include <chrono>
+
 inline std::vector<unsigned long long> get_random_seeds(int n)
 {
-    std::mt19937_64 random(0);  // fixed seed (for debugging)
+    // Use current time as a seed for the random number generator
+    unsigned long long time_seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::mt19937_64 random(time_seed);
+
     std::vector<unsigned long long> seeds(n);
     for (auto &seed : seeds)
         seed = random();

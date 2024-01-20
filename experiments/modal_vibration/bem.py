@@ -15,8 +15,10 @@ import meshio
 root_dir = "dataset/modal_vibration"
 obj_list = glob(os.path.join(root_dir, "*"))
 
-mode_num = 8
+mode_num = 64
 for obj_dir in tqdm(obj_list):
+    if not os.path.isdir(obj_dir):
+        continue
     mesh_path = os.path.join(obj_dir, "mesh.obj")
     config = configparser.ConfigParser()
     config.read(f"{obj_dir}/config.ini")
@@ -25,10 +27,16 @@ for obj_dir in tqdm(obj_list):
     material = Material(getattr(MatSet, config.get("mesh", "material")))
     print("vertices num:", obj.vertices.shape[0])
     obj.modal_analysis(k=mode_num, material=material)
-    obj.eigenvalues /= 10
+    if "armadillo" in obj_dir or "bunny" in obj_dir or "dragon" in obj_dir:
+        obj.eigenvalues /= 10
     print("frequencies:", obj.get_frequencies())
 
-    points = obj.spherical_surface_points(2)
+    np.savez_compressed(
+        os.path.join(obj_dir, "modes"),
+        modes=obj.modes,
+        eigenvalues=obj.eigenvalues,
+    )
+    points = obj.spherical_surface_points(4)
     start_time = time()
 
     ffat_map_bem = np.zeros((mode_num, len(points)), dtype=np.complex64)

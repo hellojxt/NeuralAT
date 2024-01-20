@@ -58,7 +58,7 @@ xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
 
-trg_x, trg_y = 0, 16
+trg_x, trg_y = 0, 0
 
 freq_bins = calculate_bin_frequencies(256)
 print("freq_bins:", freq_bins)
@@ -106,9 +106,75 @@ def run_neual_cache():
 nc_spec, nc_cost_time = run_neual_cache()
 
 from matplotlib import pyplot as plt
+from matplotlib.font_manager import FontProperties
+from matplotlib.image import imread
+from matplotlib.gridspec import GridSpec
 
-plt.imshow(nc_spec.T)
-plt.colorbar()
-plt.show()
-plt.close()
-print(nc_cost_time)
+# Assuming the other parts of your script are already defined (ffat_map_bem, our_maps, snrs, ssims, data_dir)
+
+# Load specific font
+font_path = (
+    "/home/jxt/.local/share/fonts/LinBiolinum_R.ttf"  # Replace with your font file path
+)
+font_bold_path = "/home/jxt/.local/share/fonts/2LinBiolinum_RB.ttf"  # Replace with your font file path
+my_font = FontProperties(fname=font_path)
+my_font_bold = FontProperties(fname=font_bold_path)
+title_pad = 20
+font_size = 20
+
+x_start = 0
+x_end = 1
+
+fig = plt.figure(figsize=(18, 3))
+gs = GridSpec(1, 3, width_ratios=[1, 1, 3])
+ax = fig.add_subplot(gs[0])
+img = imread(f"{data_dir}/start.png")
+ax.imshow(img)
+ax.text(
+    0.5,
+    -0.2,
+    "Start State",
+    transform=ax.transAxes,
+    ha="center",
+    fontproperties=my_font,
+    fontsize=font_size,
+)
+ax.axis("off")
+ax = fig.add_subplot(gs[1])
+img = imread(f"{data_dir}/end.png")
+ax.imshow(img)
+ax.text(
+    0.5,
+    -0.2,
+    "End State",
+    transform=ax.transAxes,
+    ha="center",
+    fontproperties=my_font,
+    fontsize=font_size,
+)
+ax.axis("off")
+ax = fig.add_subplot(gs[2])
+img = nc_spec[:, ::-1].T
+v_max = np.max(np.abs(img)) * 0.9
+v_min = np.min(np.abs(img)) * 1.1
+ax.imshow(
+    np.abs(img),
+    vmin=v_min,
+    vmax=v_max,
+    cmap="viridis",
+    extent=[x_start, x_end, freq_bins[0], freq_bins[-1]],
+    aspect="auto",
+)  # Stretching x-axis with extent and interpolation
+
+num_y_ticks = 8
+num_x_ticks = 8
+# Set ticks
+y_ticks = np.linspace(freq_bins[0], freq_bins[-1], num_y_ticks)
+ax.set_yticks(y_ticks)
+x_ticks = np.linspace(x_start, x_end, num_x_ticks)
+ax.set_xticks(x_ticks)
+
+ax.set_xlabel("Shape Coeff", fontproperties=my_font, fontsize=font_size)
+ax.set_ylabel("Frequency (Hz)", fontproperties=my_font, fontsize=font_size)
+
+plt.savefig(f"{data_dir}/nc_spec.png", bbox_inches="tight", dpi=300)

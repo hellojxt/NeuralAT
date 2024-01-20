@@ -53,7 +53,7 @@ class BEMModel:
         if isinstance(neumann_coeff, torch.Tensor):
             neumann_coeff = neumann_coeff.detach().cpu().numpy()
         neumann_fun = GridFunction(
-            self.dp0_space, coefficients=np.asarray(neumann_coeff)
+            self.dp0_space, coefficients=np.asarray(neumann_coeff * 1e4)
         )
         self.neumann_fun = neumann_fun
         M = boundary.sparse.identity(
@@ -116,7 +116,7 @@ class BEMModel:
         dirichlet = (
             -potential_single * self.neumann_fun + potential_double * self.dirichlet_fun
         )
-        return dirichlet.reshape(*shape[:-1])
+        return dirichlet.reshape(*shape[:-1]) * 1e-4
 
     def export_neumann(self, filename):
         export(filename, grid_function=self.neumann_fun)

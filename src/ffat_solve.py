@@ -33,16 +33,31 @@ def compute_sample_r(vertices, triangles, n):
 
 
 def get_sampler(vertices, triangles, n):
-    r = compute_sample_r(vertices, triangles, n)
     importance = torch.ones(len(triangles), dtype=torch.float32).cuda()
-    sampler = ImportanceSampler(vertices, triangles, importance, 50000)
-    sampler.update()
-    sampler.poisson_disk_resample(r, 4)
-    return sampler
+    if n > 0:
+        r = compute_sample_r(vertices, triangles, n)
+        sampler = ImportanceSampler(vertices, triangles, importance, 50000)
+        timer = Timer()
+        sampler.update()
+        sampler.poisson_disk_resample(r, 4)
+        cost_time = timer.get_time()
+    else:
+        sampler = ImportanceSampler(vertices, triangles, importance, 1000)
+        timer = Timer()
+        sampler.update()
+        cost_time = timer.get_time()
+    return sampler, cost_time
 
 
 def monte_carlo_sampler_solve(
-    sampler, neumann_tri, ks, trg_points, tol=1e-6, nsteps=100, plot=False
+    sampler,
+    neumann_tri,
+    ks,
+    trg_points,
+    tol=1e-6,
+    nsteps=100,
+    plot=False,
+    check_converge=True,
 ):
     G0_constructor = MonteCarloWeight(sampler.points, sampler)
     G1_constructor = MonteCarloWeight(sampler.points, sampler, deriv=True)
@@ -56,7 +71,7 @@ def monte_carlo_sampler_solve(
         lambda x: (torch.bmm(G1_batch, x.permute(2, 0, 1)).permute(1, 2, 0) - x)
     )
     dirichlet, convergence = solver.solve(b_batch, tol=tol, nsteps=nsteps)
-    if not convergence:
+    if not convergence and check_converge:
         return None, False
     dirichlet = dirichlet.permute(2, 0, 1)
     if plot:
@@ -80,9 +95,12 @@ def monte_carlo_solve(
     tol=1e-6,
     nsteps=500,
     plot=False,
+    check_converge=True,
+    return_cost_time=False,
 ):
-    sampler = get_sampler(vertices, triangles, n)
+    sampler, sampler_cost_time = get_sampler(vertices, triangles, n)
     print("sample points: ", sampler.num_samples)
+    timer = Timer()
     idx = 0
     batch_step = 8
     mode_num = len(ks)
@@ -97,12 +115,16 @@ def monte_carlo_solve(
             tol=tol,
             nsteps=nsteps,
             plot=plot and idx == 0,
+            check_converge=check_converge,
         )
-        if not convergence:
+        if not convergence and check_converge:
             return None, False
         ffat_map[idx : idx + batch_step] = ffat_map_batch
         idx += batch_step
-    return ffat_map.cpu().numpy() * 1e-4, convergence
+    if return_cost_time:
+        return ffat_map.cpu().numpy() * 1e-4, timer.record_time + sampler_cost_time
+    else:
+        return ffat_map.cpu().numpy() * 1e-4, convergence
 
 
 def bem_solve(
@@ -117,7 +139,7 @@ def bem_solve(
 ):
     vertices = vertices.cpu().numpy()
     triangles = triangles.cpu().numpy()
-    neumann_tri = neumann_tri.cpu().numpy() * 1e4
+    neumann_tri = neumann_tri.cpu().numpy()
     ffat_map = np.zeros((len(ks), len(trg_points)), dtype=np.complex64)
     for i in range(len(ks)):
         k = ks[i].item()
@@ -132,4 +154,4 @@ def bem_solve(
             CombinedFig().add_mesh(
                 vertices, triangles, bem.get_dirichlet_coeff().imag, opacity=1.0
             ).show()
-    return ffat_map * 1e-4
+    return ffat_map

@@ -100,6 +100,11 @@ def move_the_arrow(mesh: trimesh.Trimesh,
         trimesh.transformations.vector_product(numpy.array([0, 0, 1]), target_direction)
         )
     
+    # 如果target_direction与z轴平行，则trimesh会给出nan，此时需要手动设置rotation_matrix
+    if numpy.isnan(rotation_matrix).any():
+        rotation_matrix = numpy.identity(4)
+        #rotation_matrix[:3, :3] = numpy.identity(3)
+    
     # apply the rotation
     mesh.apply_transform(rotation_matrix)
     # apply the transformation
@@ -108,25 +113,23 @@ def move_the_arrow(mesh: trimesh.Trimesh,
     return mesh
 
 
-"""
-使用方法：
-1. 选择一个点的位置作为箭头的「注视点」，并且设定所需的箭头的方向：
-    target_position = numpy.array([0, 0, 10])
-    target_direction = numpy.array([-1, -1, -1])
-2. 调用函数，生成一个指向该点的箭头：
-    mesh = construct_arrow_mesh()
-    mesh = move_the_arrow(mesh, target_position, target_direction)
-3. 输出该箭头的 obj 文件：
-    mesh.export("arrow.obj")
-具体的例子参见下面的代码。
-"""
+
+def generate_arrow_for_a_mesh(vertices, faces, target_vert_idx):
+    # get the normal vector of the target vertex
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    target_vert_normal = -mesh.vertex_normals[target_vert_idx]
+    # get the position of the target vertex
+    target_position = mesh.vertices[target_vert_idx]
+    # generate the arrow mesh
+    mesh_arrow = construct_arrow_mesh(size=0.05)
+    print(target_position, target_vert_normal)
+    mesh_arrow = move_the_arrow(mesh_arrow, target_position, target_vert_normal)
+    # combine the two mesh
+    mesh = mesh + mesh_arrow
+    return mesh
 
 
 if __name__ == "__main__":
-    mesh = construct_arrow_mesh(size=0.5)
-    target_position = numpy.array([0, 0, 10])
-    target_direction = numpy.array([-1, -21, -1])
-    mesh = move_the_arrow(mesh, target_position, target_direction)
-    
-    mesh = mesh + construct_xyz_axis_mesh() + construct_sphere_mesh(0, 0, 10)
-    mesh.export("arrow.obj")
+    mesh = trimesh.load_mesh("bunny_subdiv_1.obj")
+    generate_arrow_for_a_mesh(mesh.vertices, mesh.faces, 0).export("combined.obj")
+

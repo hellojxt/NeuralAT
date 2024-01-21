@@ -122,7 +122,7 @@ def monte_carlo_solve(
         ffat_map[idx : idx + batch_step] = ffat_map_batch
         idx += batch_step
     if return_cost_time:
-        return ffat_map.cpu().numpy() * 1e-4, timer.record_time + sampler_cost_time
+        return ffat_map.cpu().numpy() * 1e-4, timer.get_time() + sampler_cost_time
     else:
         return ffat_map.cpu().numpy() * 1e-4, convergence
 

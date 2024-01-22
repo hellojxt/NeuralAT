@@ -35,6 +35,11 @@ ffat_map_NeuralSound = (
     ffat_map_NeuralSound / r[0] / 1.225 * (mesh_size / 0.15) ** (5 / 2)
 )
 
+ffat_map_bem = ffat_map_bem[:8]
+ffat_map_ours = ffat_map_ours[:8]
+ffat_map_NeuralSound = ffat_map_NeuralSound[:8]
+ffat_map_neuPAT = ffat_map_neuPAT[:8]
+
 max_ind = 8
 ind1 = np.random.randint(0, max_ind)
 ind2 = np.random.randint(0, max_ind)
@@ -68,33 +73,33 @@ font_size = 25
 fig = plt.figure(figsize=(28, 7))
 gs = GridSpec(1, 10, width_ratios=[2, 1, 1, 1, 1, 0.3, 1, 1, 1, 1])
 
-mesh_render_img = imread(f"{data_dir}/mesh_render.png")
-left_index = mesh_render_img.shape[1] // 6
-right_index = -left_index if left_index != 0 else mesh_render_img.shape[1]
-cropped_img = mesh_render_img[:, left_index:right_index]
+# mesh_render_img = imread(f"{data_dir}/mesh_render.png")
+# left_index = mesh_render_img.shape[1] // 6
+# right_index = -left_index if left_index != 0 else mesh_render_img.shape[1]
+# cropped_img = mesh_render_img[:, left_index:right_index]
 
-ax = plt.subplot(gs[0])
-ax.imshow(cropped_img)
-ax.text(
-    0.5,
-    0.09,
-    "SNR | SSIM",
-    transform=ax.transAxes,
-    ha="center",
-    fontproperties=my_font,
-    fontsize=font_size,
-)
-if len(sys.argv) > 2:
-    ax.text(
-        0.5,
-        0.88,
-        "Mesh",
-        transform=ax.transAxes,
-        ha="center",
-        fontproperties=my_font,
-        fontsize=font_size,
-    )
-ax.axis("off")
+# ax = plt.subplot(gs[0])
+# ax.imshow(cropped_img)
+# ax.text(
+#     0.5,
+#     0.09,
+#     "SNR | SSIM",
+#     transform=ax.transAxes,
+#     ha="center",
+#     fontproperties=my_font,
+#     fontsize=font_size,
+# )
+# if len(sys.argv) > 2:
+#     ax.text(
+#         0.5,
+#         0.88,
+#         "Mesh",
+#         transform=ax.transAxes,
+#         ha="center",
+#         fontproperties=my_font,
+#         fontsize=font_size,
+#     )
+# ax.axis("off")
 
 # Plot the first image
 ax = plt.subplot(gs[1])

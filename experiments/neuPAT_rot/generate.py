@@ -94,7 +94,7 @@ y = torch.zeros(src_sample_num, 64 * 32, 1, dtype=torch.float32)
 xs = torch.linspace(0, 1, 64, device="cuda", dtype=torch.float32)
 ys = torch.linspace(0, 1, 32, device="cuda", dtype=torch.float32)
 gridx, gridy = torch.meshgrid(xs, ys)
-check_correct = False
+check_correct = True
 
 for i in tqdm(range(src_sample_num)):
     while True:
@@ -131,11 +131,12 @@ for i in tqdm(range(src_sample_num)):
 
         CombinedFig().add_mesh(
             vertices, triangles, neumann_tri[0].abs(), opacity=1.0
-        ).show()
-        plt.imshow(ffat_map.reshape(64, 32))
-        plt.colorbar()
-        plt.savefig(f"{data_dir}/figs/{i}.png")
-        plt.close()
+        ).add_points(trg_points.reshape(64, 32, 3)[29, 16]).show()
+        sys.exit()
+        # plt.imshow(ffat_map.reshape(64, 32))
+        # plt.colorbar()
+        # plt.savefig(f"{data_dir}/figs/{i}.png")
+        # plt.close()
 
     x[i, :, 0] = rot_k.cpu()
     x[i, :, 1] = freq_pos.cpu()

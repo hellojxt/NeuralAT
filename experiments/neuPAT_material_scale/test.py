@@ -86,8 +86,8 @@ with open(f"{data_dir}/../config.json", "r") as file:
 data = torch.load(f"{data_dir}/../modal_data.pt")
 vertices_base = data["vertices"]
 triangles = data["triangles"]
-neumann_tri = data["neumann_tri"][:8]
-ks_base = data["ks"][:8]
+neumann_tri = data["neumann_tri"]
+ks_base = data["ks"]
 mode_num = len(ks_base)
 
 size_min = np.log(config_data.get("solver", {}).get("size_scale_min"))

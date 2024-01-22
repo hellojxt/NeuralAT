@@ -125,11 +125,50 @@ def concatenate_videos(video_paths, output_path):
     os.remove("file_list.txt")
 
 
-root_dir = sys.argv[-1]
+root_dir = "dataset/NeuPAT/scale/small_mlp"
 from glob import glob
 
 data_dir_lst = glob(root_dir + "/*")
 video_paths = []
+
+
+def click_video(click_camera_image):
+    create_video_from_image(
+        click_camera_image,
+        click_camera_image.replace(".png", "_bem.mp4"),
+        click_camera_image.replace(".png", "_bem.wav"),
+        duration,
+        ["BEM"],
+        [90],
+        [[0.5, 0.05]],
+    )
+    video_paths.append(click_camera_image.replace(".png", "_bem_with_audio.mp4"))
+
+    create_video_from_image(
+        click_camera_image,
+        click_camera_image.replace(".png", "_neuPAT.mp4"),
+        click_camera_image.replace(".png", "_neuPAT.wav"),
+        duration,
+        ["Ours"],
+        [90],
+        [[0.5, 0.05]],
+    )
+    video_paths.append(click_camera_image.replace(".png", "_neuPAT_with_audio.mp4"))
+
+    create_video_from_image(
+        click_camera_image,
+        click_camera_image.replace(".png", "_NeuralSound.mp4"),
+        click_camera_image.replace(".png", "_NeuralSound.wav"),
+        duration,
+        ["NeuralSound [Jin et al. 2022]"],
+        [90],
+        [[0.5, 0.05]],
+    )
+    video_paths.append(
+        click_camera_image.replace(".png", "_NeuralSound_with_audio.mp4")
+    )
+
+
 for data_dir in data_dir_lst:
     if not os.path.isdir(data_dir):
         continue
@@ -142,51 +181,10 @@ for data_dir in data_dir_lst:
         if idx == 2:
             for i in range(3):
                 click_camera_image = click_image.replace("_0.png", f"_{i}.png")
-                create_video_from_image(
-                    click_camera_image,
-                    click_camera_image.replace(".png", "_bem.mp4"),
-                    click_camera_image.replace(".png", "_bem.wav"),
-                    duration,
-                    ["BEM"],
-                    [90],
-                    [[0.5, 0.05]],
-                )
-                video_paths.append(
-                    click_camera_image.replace(".png", "_bem_with_audio.mp4")
-                )
-                create_video_from_image(
-                    click_camera_image,
-                    click_camera_image.replace(".png", "_ours.mp4"),
-                    click_camera_image.replace(".png", "_ours_4000.wav"),
-                    duration,
-                    ["Our Monte Carlo Solver"],
-                    [90],
-                    [[0.5, 0.05]],
-                )
-                video_paths.append(
-                    click_camera_image.replace(".png", "_ours_with_audio.mp4")
-                )
+                click_video(click_camera_image)
         else:
-            create_video_from_image(
-                click_image,
-                click_image.replace(".png", "_bem.mp4"),
-                click_image.replace(".png", "_bem.wav"),
-                duration,
-                ["BEM"],
-                [90],
-                [[0.5, 0.05]],
-            )
-            video_paths.append(click_image.replace(".png", "_bem_with_audio.mp4"))
-            create_video_from_image(
-                click_image,
-                click_image.replace(".png", "_ours.mp4"),
-                click_image.replace(".png", "_ours_4000.wav"),
-                duration,
-                ["Our Monte Carlo Solver"],
-                [90],
-                [[0.5, 0.05]],
-            )
-            video_paths.append(click_image.replace(".png", "_ours_with_audio.mp4"))
+            click_camera_image = click_image
+            click_video(click_camera_image)
         idx += 1
 
-concatenate_videos(video_paths, f"{root_dir}/click_compare.mp4")
+concatenate_videos(video_paths, f"{root_dir}/../mat_size_edit.mp4")

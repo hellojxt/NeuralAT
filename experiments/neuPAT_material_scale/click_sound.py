@@ -70,9 +70,9 @@ def get_mesh_size(vertices):
     return (bbox_max - bbox_min).max()
 
 
-mode_num = 16
+mode_num = 8
 bem_base_data = torch.load(os.path.join(obj_dir, "../../modal_data.pt"))
-modes = bem_base_data["modes"]
+modes = bem_base_data["modes"][:, :, :mode_num]
 print("modes", modes.shape)
 bem_data = np.load(os.path.join(obj_dir, "bem.npz"))
 wave_number = bem_data["wave_number"]

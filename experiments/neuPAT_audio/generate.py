@@ -129,7 +129,7 @@ def calculate_ffat_map_bem():
     )
 
 
-check_correct = False
+check_correct = True
 sample_num = 8000
 snrs = []
 ssims = []
@@ -181,30 +181,31 @@ for i in tqdm(range(src_sample_num)):
             ffat_map = np.abs(ffat_map)
             break
     if check_correct:
-        # CombinedFig().add_mesh(
-        #     vertices, triangles, neumann_tri.abs(), opacity=1.0
-        # ).show()
-        ffat_map_bem = calculate_ffat_map_bem()
-        snrs.append(SNR(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32)))
-        ssims.append(
-            complex_ssim(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32))
-        )
-        ffat_map = np.log(ffat_map * 10e6 + 1)
-        ffat_map_bem = np.log(ffat_map_bem * 10e6 + 1)
-        vmax = 3
-        vmin = 1
-        import matplotlib.pyplot as plt
+        CombinedFig().add_mesh(
+            vertices, triangles, neumann_tri.abs(), opacity=1.0
+        ).add_points(trg_points.reshape(64, 32, 3)[15, 15]).show()
+        sys.exit()
+        # ffat_map_bem = calculate_ffat_map_bem()
+        # snrs.append(SNR(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32)))
+        # ssims.append(
+        #     complex_ssim(ffat_map_bem.reshape(64, 32), ffat_map.reshape(64, 32))
+        # )
+        # ffat_map = np.log(ffat_map * 10e6 + 1)
+        # ffat_map_bem = np.log(ffat_map_bem * 10e6 + 1)
+        # vmax = 3
+        # vmin = 1
+        # import matplotlib.pyplot as plt
 
-        plt.subplot(121)
-        plt.imshow(ffat_map_bem.reshape(64, 32))
-        plt.colorbar()
-        plt.subplot(122)
-        plt.imshow(ffat_map.reshape(64, 32))
-        plt.colorbar()
-        plt.title(f"snr: {snrs[-1]:.2f}, ssim: {ssims[-1]:.2f}")
-        os.makedirs(f"{data_dir}/{displacement[1]:.2f}", exist_ok=True)
-        plt.savefig(f"{data_dir}/{displacement[1]:.2f}/{i}.png")
-        plt.close()
+        # plt.subplot(121)
+        # plt.imshow(ffat_map_bem.reshape(64, 32))
+        # plt.colorbar()
+        # plt.subplot(122)
+        # plt.imshow(ffat_map.reshape(64, 32))
+        # plt.colorbar()
+        # plt.title(f"snr: {snrs[-1]:.2f}, ssim: {ssims[-1]:.2f}")
+        # os.makedirs(f"{data_dir}/{displacement[1]:.2f}", exist_ok=True)
+        # plt.savefig(f"{data_dir}/{displacement[1]:.2f}/{i}.png")
+        # plt.close()
 
     x[i, :, :3] = src_pos.cpu()
     x[i, :, 3:6] = trg_pos.cpu()

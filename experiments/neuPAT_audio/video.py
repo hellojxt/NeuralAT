@@ -1,8 +1,9 @@
 import subprocess
 from glob import glob
 import os
+import sys
 
-data_dir = "dataset/NeuPAT/audio"
+data_dir = sys.argv[1]
 
 audio_lst = glob(data_dir + "/*.wav")
 

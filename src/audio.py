@@ -46,9 +46,10 @@ def apply_spec_mask_to_audio(
         def plot_spec(ax, spec, title):
             ax.set_title(title)
             ax.imshow(librosa.amplitude_to_db(spec), origin="lower", aspect="auto")
+            plt.axis("off")
 
         ax = plt.subplot(3, 1, idx)
-        plot_spec(ax, torch.abs(spec), title=title)
+        plot_spec(ax, torch.abs(spec), title="")
 
     plot(spec_audio, 1, "original")
 

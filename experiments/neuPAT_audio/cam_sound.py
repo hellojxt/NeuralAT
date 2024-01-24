@@ -35,7 +35,7 @@ def global_to_local(X, ori, global_position):
     return local_position
 
 
-data_dir = "dataset/NeuPAT/audio/large_mlp"
+data_dir = "dataset/NeuPAT/audio_cam/large_mlp"
 
 
 with open(f"{data_dir}/../config.json", "r") as file:
@@ -65,36 +65,22 @@ gridx, gridy = torch.meshgrid(xs, ys)
 
 animation_data = np.load(f"{data_dir}/../animation.npz")
 move_lst = animation_data["move"]
-cam_pos = animation_data["cam_pos"]
-obj_pos = np.array(animation_data["obj_pos"])
-obj_ori = animation_data["obj_ori"]
-obj_ori = np.array([obj_ori[1], obj_ori[2], obj_ori[3], obj_ori[0]])
-print("obj_pos:", obj_pos)
-print("obj_ori:", obj_ori)
+cam_lst = animation_data["cam"]
 
-res = 32
-phi_spacing = 2 * np.pi / (res * 2 - 1)
-theta_spacing = np.pi / (res - 1)
-camera_local_position = global_to_local(obj_pos, obj_ori, cam_pos)
-r = np.linalg.norm(camera_local_position)
-theta = np.arctan2(camera_local_position[1], camera_local_position[0])
-phi = np.arccos(camera_local_position[2] / r)
-x_i = int(theta / phi_spacing)
-y_i = int(phi / theta_spacing)
-n_fft = 512
+n_fft = 1024
 freq_bins = calculate_bin_frequencies(n_fft)
 
 nc_cost_time = 0
 r_min = 2
 r_max = 4
 trg_pos = torch.zeros(64, 32, 3, device="cuda", dtype=torch.float32)
-r_scale = torch.ones(1).cuda() * 0
-r = (r_scale * (r_max - r_min) + r_min).item()
-trg_pos[:, :, 0] = 0
+trg_pos[:, :, 0] = 1
 trg_pos[:, :, 1] = gridx
 trg_pos[:, :, 2] = gridy
-trg_pos = trg_pos[x_i, y_i].reshape(3)
-
+trg_pos_0 = trg_pos[0, 0].reshape(3)
+trg_pos_1 = trg_pos[15, 15].reshape(3)
+cam_lst = torch.from_numpy(cam_lst).cuda()
+trg_pos = trg_pos_0 + (trg_pos_1 - trg_pos_0) * cam_lst.reshape(-1, 1, 1)
 
 freq_pos = torch.zeros(len(freq_bins), device="cuda", dtype=torch.float32)
 for freq_i in tqdm(range(len(freq_bins))):
@@ -115,7 +101,7 @@ print("trg_pos:", trg_pos.shape)
 def run_neual_cache():
     x = torch.zeros(len(src_pos), len(freq_pos), 5, dtype=torch.float32, device="cuda")
     x[:, :, 0] = src_pos
-    x[:, :, 1:4] = trg_pos.reshape(1, 1, 3)
+    x[:, :, 1:4] = trg_pos
     x[:, :, 4] = freq_pos.reshape(1, -1)
     nc_spec = model(x.reshape(-1, 5)).reshape(len(src_pos), len(freq_pos))
     timer = Timer()
@@ -126,6 +112,8 @@ def run_neual_cache():
 
 
 nc_spec, nc_cost_time = run_neual_cache()
+nc_spec, nc_cost_time = run_neual_cache()
+print(nc_cost_time)
 nc_spec = (10**nc_spec.T) * 10e-6 - 10e-6
 
 from src.audio import apply_spec_mask_to_audio

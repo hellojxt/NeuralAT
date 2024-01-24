@@ -89,11 +89,11 @@ def add_subtitles_and_save_first_frame(
 
 def cost_time_string(cost_time):
     if cost_time < 1:
-        return f"Cost Time: {cost_time * 1000:.0f}ms"
+        return f"Time Cost: {cost_time * 1000:.0f}ms"
     elif cost_time < 60:
-        return f"Cost Time: {cost_time:.0f}s"
+        return f"Time Cost: {cost_time:.0f}s"
     else:
-        return f"Cost Time:  {cost_time / 60:.0f} mins"
+        return f"Time Cost:  {cost_time / 60:.0f} mins"
 
 
 import sys

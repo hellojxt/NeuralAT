@@ -24,6 +24,9 @@ for obj_dir in tqdm(obj_list):
     config.read(f"{obj_dir}/config.ini")
     obj = ModalSoundObj(mesh_path)
     obj.normalize(config.getfloat("mesh", "size"))
+    print("obj:", obj_dir)
+    print(len(obj.surf_triangles))
+    continue
     material = Material(getattr(MatSet, config.get("mesh", "material")))
     print("vertices num:", obj.vertices.shape[0])
     obj.modal_analysis(k=mode_num, material=material)

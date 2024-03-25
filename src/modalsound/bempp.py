@@ -4,7 +4,9 @@ from bempp.api import GridFunction, export, function_space
 import numpy as np
 import warnings
 import torch
+import os
 
+os.environ["PYOPENCL_CTX"] = "0"
 # warnings.filterwarnings("ignore")
 bempp.api.enable_console_logging("debug")
 bempp.api.BOUNDARY_OPERATOR_DEVICE_TYPE = "gpu"

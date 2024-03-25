@@ -18,22 +18,22 @@ class CUDA_MODULE:
     def load(Debug=False, MemoryCheck=False, Verbose=False):
         src_dir = os.path.dirname(os.path.abspath(__file__)) + "/cuda"
         os.environ["TORCH_EXTENSIONS_DIR"] = os.path.join(src_dir, "build")
-        cflags = "--extended-lambda --expt-relaxed-constexpr "
+        cflags = ["--extended-lambda", "--expt-relaxed-constexpr"]
         if Debug:
-            cflags += "-G -g -O0"
-            cflags += " -DDEBUG"
+            cflags += ["-G", "-g", "-O0"]
+            cflags += ["-DDEBUG"]
         else:
-            cflags += "-O3"
-            cflags += " -DNDEBUG"
+            cflags += ["-O3"]
+            cflags += ["-DNDEBUG"]
         if MemoryCheck:
-            cflags += " -DMEMORY_CHECK"
+            cflags += ["-DMEMORY_CHECK"]
         cuda_files = glob(src_dir + "/*.cu")
         include_paths = [src_dir + "/include"]
         CUDA_MODULE._module = load_cuda(
             name="CUDA_MODULE",
             sources=cuda_files,
             extra_include_paths=include_paths,
-            extra_cuda_cflags=[cflags],
+            extra_cuda_cflags=cflags,
             verbose=Verbose,
         )
         return CUDA_MODULE._module

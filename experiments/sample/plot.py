@@ -40,9 +40,9 @@ from matplotlib.gridspec import GridSpec
 
 # Load specific font
 font_path = (
-    "/home/jxt/.local/share/fonts/LinBiolinum_R.ttf"  # Replace with your font file path
+    "dataset/fonts/LinBiolinum_R.ttf"  # Replace with your font file path
 )
-font_bold_path = "/home/jxt/.local/share/fonts/2LinBiolinum_RB.ttf"  # Replace with your font file path
+font_bold_path = "dataset/fonts/LinBiolinum_RB.ttf"  # Replace with your font file path
 font_size = 35
 my_font = FontProperties(fname=font_path)
 my_font_bold = FontProperties(fname=font_bold_path)
@@ -76,4 +76,5 @@ ax.text(
 )
 plt.axis("off")
 plt.tight_layout()
+plt.show()
 plt.savefig(f"{data_dir}/compare.png")

@@ -1,17 +1,15 @@
 #pragma once
 #include <common.h>
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
-#include <tuple>
-#include <unordered_map>
 #include <vector>
+#include <iostream>
 
-NWOB_NAMESPACE_BEGIN
+BEM_NAMESPACE_BEGIN
 
 #define DEBUG_GUARD_SIZE 32
 
@@ -403,4 +401,4 @@ struct PitchedPtr
         size_t size[N];
 };
 
-NWOB_NAMESPACE_END
+BEM_NAMESPACE_END

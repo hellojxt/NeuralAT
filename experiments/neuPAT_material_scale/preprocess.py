@@ -10,7 +10,7 @@ from src.modalsound.model import (
     MeshObj,
     get_spherical_surface_points,
 )
-from src.cuda_imp import ImportanceSampler
+from src.mcs.mcs import ImportanceSampler
 import numpy as np
 import torch
 

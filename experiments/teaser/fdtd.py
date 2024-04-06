@@ -3,8 +3,8 @@ import sys
 sys.path.append("./")
 
 import torch
-from src.cuda_imp import FDTDSimulator, get_bound_info
-from src.visualize import CombinedFig
+from src.mcs.mcs import FDTDSimulator, get_bound_info
+from src.utils import CombinedFig
 from src.modalsound.model import MeshObj
 from src.timer import Timer
 import os

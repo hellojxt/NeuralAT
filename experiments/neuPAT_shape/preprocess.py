@@ -10,8 +10,8 @@ from src.modalsound.model import (
     MeshObj,
     get_spherical_surface_points,
 )
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight
-from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
+from src.mcs.mcs import ImportanceSampler, MonteCarloWeight
+from src.utils import plot_point_cloud, plot_mesh, CombinedFig
 import numpy as np
 import os
 from glob import glob

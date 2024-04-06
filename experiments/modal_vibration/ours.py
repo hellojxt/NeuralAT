@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("./")
 import torch
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight
+from src.mcs.mcs import ImportanceSampler, MonteCarloWeight
 from src.timer import Timer
 from src.modalsound.model import (
     solve_points_dirichlet,
@@ -13,7 +13,7 @@ from src.modalsound.model import (
     complex_ssim,
 )
 import numpy as np
-from src.visualize import plot_mesh, plot_point_cloud, CombinedFig
+from src.utils import plot_mesh, plot_point_cloud, CombinedFig
 from src.ffat_solve import monte_carlo_solve
 import os
 from glob import glob

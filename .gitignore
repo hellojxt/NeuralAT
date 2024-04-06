@@ -5,3 +5,6 @@ output
 dataset
 .exafmm
 *.pt
+test.blend
+build
+.cache

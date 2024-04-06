@@ -5,7 +5,7 @@ from .bempp import BEMModel
 from .mesh_process import tetra_from_mesh, update_triangle_normals
 from scipy.spatial import KDTree
 from .fem import FEMmodel, LOBPCG_solver, Material, MatSet
-from ..cuda_imp import multipole
+from ..mcs.mcs import multipole
 import torch
 from numba import njit
 

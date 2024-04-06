@@ -10,7 +10,7 @@ from src.modalsound.model import (
     MeshObj,
     get_spherical_surface_points,
 )
-from src.cuda_imp import (
+from src.mcs.mcs import (
     ImportanceSampler,
     MonteCarloWeight,
     get_weights_boundary_ks_base,
@@ -18,7 +18,7 @@ from src.cuda_imp import (
 )
 import matplotlib.pyplot as plt
 from src.ffat_solve import monte_carlo_solve, bem_solve
-from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
+from src.utils import plot_point_cloud, plot_mesh, CombinedFig
 from src.solver import BiCGSTAB_batch
 import numpy as np
 import os

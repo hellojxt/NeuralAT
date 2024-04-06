@@ -3,7 +3,7 @@ import sys
 sys.path.append("./")
 
 from src.modalsound.model import ModalSoundObj, MatSet, Material, BEMModel
-from src.visualize import CombinedFig
+from src.utils import CombinedFig
 import numpy as np
 import os
 from glob import glob

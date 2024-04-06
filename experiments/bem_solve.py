@@ -3,7 +3,7 @@ import sys
 sys.path.append("./")
 
 from src.modalsound.model import SoundObj, MatSet, Material
-from src.visualize import plot_point_cloud, plot_mesh
+from src.utils import plot_point_cloud, plot_mesh
 import numpy as np
 import os
 from glob import glob

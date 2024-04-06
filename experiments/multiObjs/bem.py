@@ -10,7 +10,7 @@ from src.modalsound.model import (
     MeshObj,
     get_spherical_surface_points,
 )
-from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
+from src.utils import plot_point_cloud, plot_mesh, CombinedFig
 import numpy as np
 import os
 from glob import glob

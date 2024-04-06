@@ -3,11 +3,11 @@ import sys
 sys.path.append("./")
 
 import torch
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight
+from src.mcs.mcs import ImportanceSampler, MonteCarloWeight
 from src.timer import Timer
 from src.modalsound.model import solve_points_dirichlet
 import numpy as np
-from src.visualize import plot_mesh, plot_point_cloud, crop_center, combine_images
+from src.utils import plot_mesh, plot_point_cloud, crop_center, combine_images
 from src.solver import BiCGSTAB, BiCGSTAB_batch, BiCGSTAB_batch2
 import os
 from glob import glob

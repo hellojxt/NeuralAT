@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 from tqdm import tqdm
 import os
-from src.cuda_imp import ImportanceSampler, MonteCarloWeight
+from src.mcs.mcs import ImportanceSampler, MonteCarloWeight
 from src.timer import Timer
 from src.solver import BiCGSTAB, BiCGSTAB_batch
 from numba import njit

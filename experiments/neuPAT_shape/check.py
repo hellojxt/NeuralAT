@@ -1,13 +1,13 @@
 import sys
 
 sys.path.append("./")
-from src.cuda_imp import (
+from src.mcs.mcs import (
     ImportanceSampler,
     MonteCarloWeight,
     get_weights_boundary_ks_base,
     get_weights_potential_ks_base,
 )
-from src.visualize import plot_point_cloud, plot_mesh, CombinedFig
+from src.utils import plot_point_cloud, plot_mesh, CombinedFig
 from src.solver import BiCGSTAB_batch
 from src.ffat_solve import bem_solve, monte_carlo_solve
 from src.modalsound.model import get_spherical_surface_points, complex_ssim, SNR

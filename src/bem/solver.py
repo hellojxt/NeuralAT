@@ -45,9 +45,10 @@ class BEM_Solver:
         self.device = vertices.device
 
     def assemble_boundary_matrix(self, wavenumber, layer_type, approx=False):
-        return getattr(
+        regular, singular = getattr(
             cuda_imp, layer_type + "_boundary_matrix" + ("_approx" if approx else "")
         )(self.vertices, self.triangles, wavenumber)
+        return regular + singular
 
     def identity_matrix(self):
         return cuda_imp.identity_matrix(self.vertices, self.triangles)

@@ -15,9 +15,8 @@ from src.utils import (
 mesh_path = "dataset/meshes/sphere.obj"
 mesh = meshio.read(mesh_path)
 vertices = torch.from_numpy(mesh.points).cuda().float()
-vertices = normalize_mesh(vertices)
+vertices = normalize_mesh(vertices) / 10
 triangles = torch.from_numpy(mesh.cells_dict["triangle"]).cuda().int()
-print(vertices.shape, triangles.shape)
 cuda_bem = BEM_Solver(vertices, triangles)
 
 x0 = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.25], [0.0, 0.0, 0.5]]).cuda().float()
@@ -68,10 +67,10 @@ for degree in [0, 1]:
         rerr_dict["HBIE"].append(get_error(x, dirichlet))
 
         beta = 1j / wave_number
-        A = (double_layer_mat - 0.5 * identity_mat) + hypersingular_mat * beta
+        A = (0.5 * identity_mat - double_layer_mat) + hypersingular_mat * beta
         b = (
-            single_layer_mat @ neumann
-            + (0.5 * identity_mat @ neumann + adjoint_double_layer_mat @ neumann) * beta
+            -single_layer_mat @ neumann
+            - (0.5 * identity_mat @ neumann + adjoint_double_layer_mat @ neumann) * beta
         )
 
         x = solve_linear_equation(A, b)

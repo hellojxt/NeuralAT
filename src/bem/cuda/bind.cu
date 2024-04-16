@@ -22,29 +22,36 @@ torch::Tensor identity_matrix(const torch::Tensor &vertices_, const torch::Tenso
 }
 
 template <PotentialType type, int LineGaussNum, int TriGaussNum>
-torch::Tensor assemble_matrix(const torch::Tensor &vertices_, const torch::Tensor &triangles_, const float wave_number)
+std::tuple<torch::Tensor, torch::Tensor> assemble_matrix(const torch::Tensor &vertices_,
+                                                         const torch::Tensor &triangles_,
+                                                         const float wave_number)
 {
     float3 *vertices = (float3 *)vertices_.data_ptr();
     int3 *triangles = (int3 *)triangles_.data_ptr();
     int vertices_size = vertices_.size(0);
     int triangles_size = triangles_.size(0);
-    torch::Tensor matrix_ =
-        torch::empty({triangles_size, triangles_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
-    PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
-
-    parallel_for_block(triangles_size, 512, [=] __device__(int x, int y) {
+    torch::Tensor matrix_regular_ =
+        torch::zeros({vertices_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    torch::Tensor matrix_singular_ =
+        torch::zeros({vertices_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    PitchedPtr<complex, 2> matrix_regular((complex *)matrix_regular_.data_ptr(), matrix_regular_.size(0),
+                                          matrix_regular_.size(1));
+    PitchedPtr<complex, 2> matrix_singular((complex *)matrix_singular_.data_ptr(), matrix_singular_.size(0),
+                                           matrix_singular_.size(1));
+    printf("triangles_size: %d\n", triangles_size);
+    parallel_for_block(triangles_size, 256, [=] __device__(int x, int y) {
         int i = x;
         for (int j = y; j < triangles_size; j += blockDim.x)
         {
             if (triangle_common_vertex_num(triangles[i], triangles[j]) == 0)
-                matrix(i, j) =
-                    face2FaceIntegrandRegular<type, TriGaussNum>(vertices, triangles[i], triangles[j], wave_number);
+                face2FaceIntegrandRegular<type, TriGaussNum>(vertices, triangles[i], triangles[j], matrix_regular,
+                                                             wave_number, false);
         }
     });
 
     parallel_for_block(triangles_size, 256, [=] __device__(int x, int y) {
         int i = x;
-        __shared__ int adj[128];
+        __shared__ int adj[64];
         __shared__ int adj_size;
         // Populate shared memory with triangle adjacency and vertex adjacency
         // information
@@ -60,31 +67,58 @@ torch::Tensor assemble_matrix(const torch::Tensor &vertices_, const torch::Tenso
             {
                 adj[atomicAdd_block(&adj_size, 1)] = j;
 #ifdef DEBUG
-                assert(adj_size < 128);
+                assert(adj_size < 64);
 #endif
             }
         }
         __syncthreads();
         const int sub_integrand_size = LineGaussNum * LineGaussNum * LineGaussNum * LineGaussNum;
-        __shared__ complex result[128];
-        for (int j = y; j < adj_size; j += blockDim.x)
-            result[j] = 0;
+        __shared__ complex result[64][9];
+        for (int j = y; j < adj_size * 9; j += blockDim.x)
+        {
+            result[j / 9][j % 9] = 0;
+        }
         __syncthreads();
+
+#ifdef DEBUG
+        int check_adj_idx = 0;
+#endif
+
         for (int j = y; j < adj_size * sub_integrand_size; j += blockDim.x)
         {
             int j_ = j / sub_integrand_size;   // adj index
             int idx = j % sub_integrand_size;  // sub integrand index
-            auto local_result = face2FaceIntegrandSingular<type, LineGaussNum>(vertices, triangles[i],
-                                                                               triangles[adj[j_]], wave_number, idx);
-            atomicAddCpxBlock(&result[j_], local_result);
+            complex local_result[9];
+
+#ifdef DEBUG
+            if (i == 0 && adj[j_] == 2)
+#endif
+            {
+                face2FaceIntegrandSingular<type, LineGaussNum>(vertices, triangles[i], triangles[adj[j_]], wave_number,
+                                                               idx, local_result);
+                for (int k = 0; k < 9; k++)
+                    atomicAddCpxBlock(&result[j_][k], local_result[k]);
+#ifdef DEBUG
+                check_adj_idx = j_;
+#endif
+            }
         }
         __syncthreads();
+#ifdef DEBUG
+        if (i == 0 && y == 0)
+            for (int k = 0; k < 9; k++)
+                printf("result[%d] = %f + %fi\n", k, result[check_adj_idx][k].real(), result[check_adj_idx][k].imag());
+#endif
+        int src_global_idx[3] = {triangles[i].x, triangles[i].y, triangles[i].z};
         for (int j = y; j < adj_size; j += blockDim.x)
         {
-            matrix(i, adj[j]) = result[j];
+            int trg_global_idx[3] = {triangles[adj[j]].x, triangles[adj[j]].y, triangles[adj[j]].z};
+            for (int k = 0; k < 3; k++)
+                for (int l = 0; l < 3; l++)
+                    atomicAddCpx(&matrix_singular(src_global_idx[k], trg_global_idx[l]), result[j][k * 3 + l]);
         }
     });
-    return matrix_;
+    return std::make_tuple(matrix_regular_, matrix_singular_);
 }
 
 template <PotentialType type>

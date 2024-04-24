@@ -90,15 +90,27 @@ inline __device__ complex singular_potential(float xsi,
     auto compute_region = [&](float v1_x, float v1_y, float v2_x, float v2_y, float ww = 1) {
         auto v1 = local_to_global2(v1_x, v1_y, trial_v, shape_func_factor_trial);
         auto v2 = local_to_global2(v2_x, v2_y, test_v, shape_func_factor_test);
-        complex local_result;
+        complex local_result, tmp;
         if constexpr (PType == HYPER_SINGULAR_LAYER)
             local_result = potential<SINGLE_LAYER>(v1, v2, trial_norm, test_norm, s) * ww;
+        else if constexpr (PType == BM_LHS)
+        {
+            bm_lhs_potential(v1, v2, trial_norm, test_norm, s, local_result, tmp);
+            local_result = local_result * ww;
+            tmp = tmp * ww;
+        }
         else
             local_result = potential<PType>(v1, v2, trial_norm, test_norm, s) * ww;
 
         for (int ii = 0; ii < 3; ii++)
             for (int jj = 0; jj < 3; jj++)
                 result[ii * 3 + jj] += local_result * shape_func_factor_trial[ii] * shape_func_factor_test[jj];
+
+        if constexpr (PType == BM_LHS)
+        {
+            local_result = tmp;
+        }
+
         result[9] += local_result;
     };
 
@@ -201,18 +213,35 @@ inline __device__ void regular_integrand(float3 *trial_v,
     float3 test_norm = triangle_norm(test_v);
     float shape_func_factor_trial[3];
     float shape_func_factor_test[3];
+    float w1 = 0.25 * trial_jacobian * test_jacobian;
+#pragma unroll
     for (int i = 0; i < TRI_GAUSS_NUM; i++)
+#pragma unroll
         for (int j = 0; j < TRI_GAUSS_NUM; j++)
         {
             float3 v1 =
                 local_to_global(tri_gauss_points[i * 2], tri_gauss_points[i * 2 + 1], trial_v, shape_func_factor_trial);
             float3 v2 =
                 local_to_global(tri_gauss_points[j * 2], tri_gauss_points[j * 2 + 1], test_v, shape_func_factor_test);
-            complex local_result = 0.25 * tri_gauss_weights[i] * tri_gauss_weights[j] * trial_jacobian * test_jacobian *
-                                   potential<PType>(v1, v2, trial_norm, test_norm, s);
+            complex local_result, tmp;
+            float w2 = w1 * tri_gauss_weights[i] * tri_gauss_weights[j];
+            if constexpr (PType == BM_LHS)
+            {
+                bm_lhs_potential(v1, v2, trial_norm, test_norm, s, local_result, tmp);
+                local_result = local_result * w2;
+                tmp = tmp * w2;
+            }
+            else
+                local_result = potential<PType>(v1, v2, trial_norm, test_norm, s) * w2;
+#pragma unroll
             for (int ii = 0; ii < 3; ii++)
+#pragma unroll
                 for (int jj = 0; jj < 3; jj++)
                     result[ii * 3 + jj] += local_result * shape_func_factor_trial[ii] * shape_func_factor_test[jj];
+            if constexpr (PType == BM_LHS)
+            {
+                local_result = tmp;
+            }
             result[9] += local_result;
         }
 }
@@ -262,13 +291,27 @@ inline __device__ void face2FaceIntegrandRegular(const float3 *vertices,
 
     if constexpr (PType == HYPER_SINGULAR_LAYER)
     {
+#pragma unroll
         for (int i = 0; i < 3; i++)
+#pragma unroll
             for (int j = 0; j < 3; j++)
             {
                 result[i * 3 + j] = result[9] * curl_product[i * 3 + j] - result[i * 3 + j] * normal_prod * k * k;
             }
     }
+    else if constexpr (PType == BM_LHS)
+    {
+#pragma unroll
+        for (int i = 0; i < 3; i++)
+#pragma unroll
+            for (int j = 0; j < 3; j++)
+            {
+                result[i * 3 + j] = result[9] * curl_product[i * 3 + j] + result[i * 3 + j];
+            }
+    }
+#pragma unroll
     for (int i = 0; i < 3; i++)
+#pragma unroll
         for (int j = 0; j < 3; j++)
             atomicAddCpx(&matrix(src_global_idx[i], trg_global_idx[j]), result[i * 3 + j]);
 }

@@ -107,6 +107,14 @@ torch::Tensor assemble_matrix(const torch::Tensor &vertices_,
             }
             __syncthreads();
         }
+        else if constexpr (type == BM_LHS)
+        {
+            for (int j = y; j < adj_size * 9; j += blockDim.x)
+            {
+                result[j / 9][j % 9] = curl_product[j / 9][j % 9] * result[j / 9][9] + result[j / 9][j % 9];
+            }
+            __syncthreads();
+        }
         int src_global_idx[3] = {triangles[i].x, triangles[i].y, triangles[i].z};
         for (int j = y; j < adj_size; j += blockDim.x)
         {
@@ -170,6 +178,18 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
           "Assemble adjoint double layer matrix with 2 and 3 gauss points");
     m.def("adjointdouble_boundary_matrix_approx_1", &assemble_matrix<bem::ADJOINT_DOUBLE_LAYER, 2, 1>,
           "Assemble adjoint double layer matrix with 1 gauss points");
+    m.def("bm_lhs_boundary_matrix", &assemble_matrix<bem::BM_LHS, 4, 6>,
+          "Assemble BM LHS matrix with 4 and 6 gauss points");
+    m.def("bm_lhs_boundary_matrix_approx", &assemble_matrix<bem::BM_LHS, 2, 3>,
+          "Assemble BM LHS matrix with 2 and 3 gauss points");
+    m.def("bm_lhs_boundary_matrix_approx_1", &assemble_matrix<bem::BM_LHS, 2, 1>,
+          "Assemble BM LHS matrix with 1 gauss points");
+    m.def("bm_rhs_boundary_matrix", &assemble_matrix<bem::BM_RHS, 4, 6>,
+          "Assemble BM RHS matrix with 4 and 6 gauss points");
+    m.def("bm_rhs_boundary_matrix_approx", &assemble_matrix<bem::BM_RHS, 2, 3>,
+          "Assemble BM RHS matrix with 2 and 3 gauss points");
+    m.def("bm_rhs_boundary_matrix_approx_1", &assemble_matrix<bem::BM_RHS, 2, 1>,
+          "Assemble BM RHS matrix with 1 gauss points");
     m.def("identity_matrix", &identity_matrix, "Assemble identity matrix");
     m.def("single_boundary_potential", &solve_potential<bem::SINGLE_LAYER>, "Solve single layer potential");
     m.def("double_boundary_potential", &solve_potential<bem::DOUBLE_LAYER>, "Solve double layer potential");

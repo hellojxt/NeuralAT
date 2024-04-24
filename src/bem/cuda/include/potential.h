@@ -10,6 +10,8 @@ enum PotentialType
     DOUBLE_LAYER,
     ADJOINT_DOUBLE_LAYER,
     HYPER_SINGULAR_LAYER,
+    BM_LHS,
+    BM_RHS
 };
 #define EPS 1e-3
 
@@ -37,6 +39,28 @@ HOST_DEVICE inline complex potential(float3 x, float3 y, float3 xn, float3 yn, f
         return exp(ikr) / (4 * M_PI * r * r * r) *
                ((3 - 3 * ikr - k * k * r * r) * dot(y - x, yn) * dot(x - y, xn) / (r * r) + (1 - ikr) * dot(xn, yn));
     }
+    else if constexpr (Type == BM_LHS)
+    {
+        return (-complex(0, 1) * k * dot(xn, yn) + 1.0 / (r * r) * (1 - ikr) * dot(y - x, yn)) * exp(ikr) /
+               (4 * M_PI * r);
+    }
+    else if constexpr (Type == BM_RHS)
+    {
+        auto sp = exp(ikr) / (4 * M_PI * r);
+        return -sp + complex(0, 1) / k * sp / (r * r) * (1 - ikr) * dot(x - y, xn);
+    }
+}
+
+HOST_DEVICE inline void
+bm_lhs_potential(float3 x, float3 y, float3 xn, float3 yn, float k, complex &ret1, complex &ret2)
+{
+    float r = length(x - y);
+    if (r < EPS)
+        r = EPS;
+    complex ikr = complex(0, 1) * r * k;
+    auto sp = exp(ikr) / (4 * M_PI * r);
+    ret1 = (-complex(0, 1) * k * dot(xn, yn) + 1.0 / (r * r) * (1 - ikr) * dot(y - x, yn)) * sp;
+    ret2 = complex(0, 1) / k * sp;
 }
 
 BEM_NAMESPACE_END

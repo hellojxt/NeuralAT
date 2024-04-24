@@ -30,6 +30,7 @@ space = bempp.api.function_space(grid, "P", 1)
 
 for wave_number in [1, 10, 100]:
     print(f"Wave number: {wave_number}")
+    beta = 1j / wave_number
     slp = bempp.api.operators.boundary.helmholtz.single_layer(
         space,
         space,
@@ -120,3 +121,25 @@ for wave_number in [1, 10, 100]:
         print(hyp_matrix_cuda)
         print("hyp_matrix_bempp:")
         print(hyp_matrix_bempp)
+
+    LHS_bempp = -double_matrix_bempp + beta * hyp_matrix_bempp
+    LHS_cuda = cuda_bem.assemble_boundary_matrix(wave_number, "bm_lhs")
+    rerr = torch.norm(LHS_bempp - LHS_cuda) / torch.norm(LHS_bempp)
+    if rerr > 1e-4:
+        print("triangles:", triangles)
+        print(f"Relative error LHS: {rerr}")
+        print("LHS_cuda:")
+        print(LHS_cuda)
+        print("LHS_bempp:")
+        print(LHS_bempp)
+
+    RHS_bempp = -single_matrix_bempp - beta * adjoint_double_matrix_bempp
+    RHS_cuda = cuda_bem.assemble_boundary_matrix(wave_number, "bm_rhs")
+    rerr = torch.norm(RHS_bempp - RHS_cuda) / torch.norm(RHS_bempp)
+    if rerr > 1e-4:
+        print("triangles:", triangles)
+        print(f"Relative error RHS: {rerr}")
+        print("RHS_cuda:")
+        print(RHS_cuda)
+        print("RHS_bempp:")
+        print(RHS_bempp)

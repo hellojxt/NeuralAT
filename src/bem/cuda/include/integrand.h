@@ -19,6 +19,14 @@ inline __device__ float3 triangle_norm(float3 *verts)
     return n / length(n);
 }
 
+inline __device__ float3 triangle_norm(float3 v1, float3 v2, float3 v3)
+{
+    float3 v1v2 = v2 - v1;
+    float3 v1v3 = v3 - v1;
+    float3 n = cross(v1v2, v1v3);
+    return n / length(n);
+}
+
 inline __device__ float jacobian(float3 *v)
 {
     return length(cross(v[1] - v[0], v[2] - v[0]));
@@ -79,37 +87,19 @@ inline __device__ complex singular_potential(float xsi,
     float shape_func_factor_test[3];
     complex log_result = 0;
 
-#ifdef DEBUG
-    if (thread_idx == 0)
-    {
-        printf("singular_potential for thread %d\n", thread_idx);
-        printf("trial_v = (%f, %f, %f), (%f, %f, %f), (%f, %f, %f)\n", trial_v[0].x, trial_v[0].y, trial_v[0].z,
-               trial_v[1].x, trial_v[1].y, trial_v[1].z, trial_v[2].x, trial_v[2].y, trial_v[2].z);
-        printf("test_v = (%f, %f, %f), (%f, %f, %f), (%f, %f, %f)\n", test_v[0].x, test_v[0].y, test_v[0].z,
-               test_v[1].x, test_v[1].y, test_v[1].z, test_v[2].x, test_v[2].y, test_v[2].z);
-    }
-
-#endif
-
     auto compute_region = [&](float v1_x, float v1_y, float v2_x, float v2_y, float ww = 1) {
         auto v1 = local_to_global2(v1_x, v1_y, trial_v, shape_func_factor_trial);
         auto v2 = local_to_global2(v2_x, v2_y, test_v, shape_func_factor_test);
-        auto local_result = potential<PType>(v1, v2, trial_norm, test_norm, s) * ww;
+        complex local_result;
+        if constexpr (PType == HYPER_SINGULAR_LAYER)
+            local_result = potential<SINGLE_LAYER>(v1, v2, trial_norm, test_norm, s) * ww;
+        else
+            local_result = potential<PType>(v1, v2, trial_norm, test_norm, s) * ww;
+
         for (int ii = 0; ii < 3; ii++)
             for (int jj = 0; jj < 3; jj++)
                 result[ii * 3 + jj] += local_result * shape_func_factor_trial[ii] * shape_func_factor_test[jj];
-#ifdef DEBUG
-        if (thread_idx == 0)
-        {
-            printf("thread %d : v1 = (%f, %f, %f), v2 = (%f, %f, %f), local_result = %f + %fj\n", thread_idx, v1.x,
-                   v1.y, v1.z, v2.x, v2.y, v2.z, local_result.real(), local_result.imag());
-            printf("shape_func_factor_trial = %f, %f, %f\n", shape_func_factor_trial[0], shape_func_factor_trial[1],
-                   shape_func_factor_trial[2]);
-            printf("shape_func_factor_test = %f, %f, %f\n", shape_func_factor_test[0], shape_func_factor_test[1],
-                   shape_func_factor_test[2]);
-            printf("weight = %f\n", weight * w);
-        }
-#endif
+        result[9] += local_result;
     };
 
     switch (neighbor_num)
@@ -149,7 +139,7 @@ inline __device__ complex singular_potential(float xsi,
             break;
         }
     }
-    for (int i = 0; i < 9; i++)
+    for (int i = 0; i < 10; i++)
         result[i] *= w * weight;
 #ifdef DEBUG
     if (thread_idx == 0)
@@ -220,16 +210,10 @@ inline __device__ void regular_integrand(float3 *trial_v,
                 local_to_global(tri_gauss_points[j * 2], tri_gauss_points[j * 2 + 1], test_v, shape_func_factor_test);
             complex local_result = 0.25 * tri_gauss_weights[i] * tri_gauss_weights[j] * trial_jacobian * test_jacobian *
                                    potential<PType>(v1, v2, trial_norm, test_norm, s);
-#ifdef DEBUG
-            if (log)
-            {
-                printf("(%f + %fj) %f %f\n", local_result.real(), local_result.imag(), shape_func_factor_trial[0],
-                       shape_func_factor_test[0]);
-            }
-#endif
             for (int ii = 0; ii < 3; ii++)
                 for (int jj = 0; jj < 3; jj++)
                     result[ii * 3 + jj] += local_result * shape_func_factor_trial[ii] * shape_func_factor_test[jj];
+            result[9] += local_result;
         }
 }
 
@@ -254,6 +238,8 @@ inline __device__ void regular_integrand(float3 *trial_v,
 
 template <PotentialType PType, int GAUSS_NUM>
 inline __device__ void face2FaceIntegrandRegular(const float3 *vertices,
+                                                 float normal_prod,
+                                                 float *curl_product,
                                                  int3 src,
                                                  int3 trg,
                                                  PitchedPtr<complex, 2> matrix,
@@ -264,22 +250,27 @@ inline __device__ void face2FaceIntegrandRegular(const float3 *vertices,
     float src_jacobian = jacobian(src_v);
     float3 trg_v[3] = {{vertices[trg.x]}, {vertices[trg.y]}, {vertices[trg.z]}};
     float trg_jacobian = jacobian(trg_v);
-    complex result[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    regular_integrand<PType, GAUSS_NUM>(src_v, trg_v, src_jacobian, trg_jacobian, k, result, log);
+    complex result[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    if constexpr (PType == HYPER_SINGULAR_LAYER)
+        regular_integrand<SINGLE_LAYER, GAUSS_NUM>(src_v, trg_v, src_jacobian, trg_jacobian, k, result, log);
+    else
+        regular_integrand<PType, GAUSS_NUM>(src_v, trg_v, src_jacobian, trg_jacobian, k, result, log);
+
     int src_global_idx[3] = {src.x, src.y, src.z};
     int trg_global_idx[3] = {trg.x, trg.y, trg.z};
+
+    if constexpr (PType == HYPER_SINGULAR_LAYER)
+    {
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+            {
+                result[i * 3 + j] = result[9] * curl_product[i * 3 + j] - result[i * 3 + j] * normal_prod * k * k;
+            }
+    }
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
             atomicAddCpx(&matrix(src_global_idx[i], trg_global_idx[j]), result[i * 3 + j]);
-#ifdef DEBUG
-    if (log)
-    {
-        printf("src = %d %d %d, trg = %d %d %d\n", src.x, src.y, src.z, trg.x, trg.y, trg.z);
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-                printf("result[%d][%d] = %f + %fi\n", i, j, result[i * 3 + j].real(), result[i * 3 + j].imag());
-    }
-#endif
 }
 
 template <PotentialType PType, int GAUSS_NUM>
@@ -297,9 +288,7 @@ inline __device__ void face2FaceIntegrandSingular(const float3 *vertices,
     int neighbor_num = triangle_common_vertex_num(src, trg);
     float3 src_v2[3];
     float3 trg_v2[3];
-    complex result_local[9];
-    for (int i = 0; i < 9; i++)
-        result_local[i] = 0;
+    complex result_local[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int i[3] = {0, 1, 2};
     int j[3] = {0, 1, 2};
     int src_int[3] = {src.x, src.y, src.z};
@@ -350,6 +339,7 @@ inline __device__ void face2FaceIntegrandSingular(const float3 *vertices,
     for (int ii = 0; ii < 3; ii++)
         for (int jj = 0; jj < 3; jj++)
             result[i[ii] * 3 + j[jj]] = result_local[ii * 3 + jj];
+    result[9] = result_local[9];
 }
 
 // template <PotentialType PType, int GAUSS_NUM>

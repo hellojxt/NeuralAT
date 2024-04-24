@@ -98,3 +98,25 @@ for wave_number in [1, 10, 100]:
         print(adjoint_double_matrix_cuda)
         print("adjoint_double_matrix_bempp:")
         print(adjoint_double_matrix_bempp)
+
+    hyp = bempp.api.operators.boundary.helmholtz.hypersingular(
+        space,
+        space,
+        space,
+        wave_number,
+        device_interface="opencl",
+        precision="single",
+    )
+
+    hyp_matrix_bempp = torch.from_numpy(hyp.weak_form().A).cuda()
+    hyp_matrix_cuda = cuda_bem.assemble_boundary_matrix(wave_number, "hypersingular")
+
+    rerr = torch.norm(hyp_matrix_bempp - hyp_matrix_cuda) / torch.norm(hyp_matrix_bempp)
+
+    if rerr > 1e-4:
+        print("triangles:", triangles)
+        print(f"Relative error hypersingular: {rerr}")
+        print("hyp_matrix_cuda:")
+        print(hyp_matrix_cuda)
+        print("hyp_matrix_bempp:")
+        print(hyp_matrix_bempp)

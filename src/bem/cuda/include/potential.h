@@ -9,7 +9,7 @@ enum PotentialType
     SINGLE_LAYER,
     DOUBLE_LAYER,
     ADJOINT_DOUBLE_LAYER,
-    HYPER_SINGLE_LAYER,
+    HYPER_SINGULAR_LAYER,
 };
 #define EPS 1e-3
 
@@ -32,7 +32,7 @@ HOST_DEVICE inline complex potential(float3 x, float3 y, float3 xn, float3 yn, f
     {
         return -exp(ikr) / (4 * M_PI * r * r * r) * (1 - ikr) * dot(x - y, xn);
     }
-    else if constexpr (Type == HYPER_SINGLE_LAYER)
+    else if constexpr (Type == HYPER_SINGULAR_LAYER)
     {
         return exp(ikr) / (4 * M_PI * r * r * r) *
                ((3 - 3 * ikr - k * k * r * r) * dot(y - x, yn) * dot(x - y, xn) / (r * r) + (1 - ikr) * dot(xn, yn));

@@ -36,6 +36,27 @@ def check_tensor(tensor, dtype):
     assert tensor.is_contiguous()
 
 
+def preprocess(vertices, triangles):
+    v0 = vertices[triangles[:, 0]]
+    v1 = vertices[triangles[:, 1]]
+    v2 = vertices[triangles[:, 2]]
+    reference_gradient = torch.tensor(
+        [[-1, 1, 0], [-1, 0, 1]], dtype=torch.float32, device=vertices.device
+    )
+    normals = torch.cross(v1 - v0, v2 - v0, dim=1)
+    normals = normals / torch.norm(normals, dim=1, keepdim=True)
+    jacobian = torch.stack([v1 - v0, v2 - v0], dim=2)
+    jac_transpose_jac = torch.bmm(jacobian.transpose(1, 2), jacobian)
+    jac_transpose_jac_inv = torch.inverse(jac_transpose_jac)
+    jac_inv_transpose = torch.bmm(jacobian, jac_transpose_jac_inv)
+    surface_gradients = torch.matmul(jac_inv_transpose, reference_gradient)
+    surface_gradients_transpose = surface_gradients.transpose(1, 2)
+    surface_curls_trans = torch.linalg.cross(
+        normals.unsqueeze(1), surface_gradients_transpose
+    )
+    return normals, surface_curls_trans
+
+
 class BEM_Solver:
     def __init__(self, vertices, triangles):
         check_tensor(vertices, torch.float32)
@@ -43,12 +64,18 @@ class BEM_Solver:
         self.vertices = vertices
         self.triangles = triangles
         self.device = vertices.device
+        self.normals, self.surface_curls_trans = preprocess(vertices, triangles)
 
     def assemble_boundary_matrix(self, wavenumber, layer_type, approx=False):
-        regular, singular = getattr(
+        return getattr(
             cuda_imp, layer_type + "_boundary_matrix" + ("_approx" if approx else "")
-        )(self.vertices, self.triangles, wavenumber)
-        return regular + singular
+        )(
+            self.vertices,
+            self.triangles,
+            self.normals,
+            self.surface_curls_trans,
+            wavenumber,
+        )
 
     def identity_matrix(self):
         return cuda_imp.identity_matrix(self.vertices, self.triangles)

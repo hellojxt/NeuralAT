@@ -147,4 +147,20 @@ inline void parallel_for_block(size_t n_blocks, size_t n_threads, F &&fun)
     parallel_for_block(0, n_blocks, n_threads, std::forward<F>(fun));
 }
 
+inline __device__ void matmulABT(const float *A, const float *B, float *ABT)
+{
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 3; ++col)
+        {
+            float sum = 0.0f;
+            for (int k = 0; k < 3; ++k)
+            {
+                sum += A[row * 3 + k] * B[col * 3 + k];
+            }
+            ABT[row * 3 + col] = sum;
+        }
+    }
+}
+
 BEM_NAMESPACE_END

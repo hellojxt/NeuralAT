@@ -11,10 +11,14 @@ class Timer:
         self.start_time = time.time()
 
     def log(self, prefix=""):
+        cost_time = self.get_time_cost()
+        print(f"{prefix} cost time: {cost_time}")
+        return cost_time
+
+    def get_time_cost(self):
         torch.cuda.synchronize()
         cost_time = time.time() - self.start_time
         self.start_time = time.time()
-        print(f"{prefix} cost time: {cost_time}")
         return cost_time
 
 

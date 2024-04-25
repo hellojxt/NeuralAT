@@ -153,14 +153,6 @@ inline __device__ complex singular_potential(float xsi,
     }
     for (int i = 0; i < 10; i++)
         result[i] *= w * weight;
-#ifdef DEBUG
-    if (thread_idx == 0)
-    {
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-                printf("result[%d][%d] = %f + %fj\n", i, j, result[i * 3 + j].real(), result[i * 3 + j].imag());
-    }
-#endif
 }
 
 template <PotentialType PType, int LINE_GAUSS_NUM>
@@ -185,10 +177,6 @@ inline __device__ void singular_integrand_thread(float3 *trial_v,
     idx = idx % (LINE_GAUSS_NUM * LINE_GAUSS_NUM);
     int eta2_i = idx / LINE_GAUSS_NUM;
     int eta3_i = idx % LINE_GAUSS_NUM;
-#ifdef DEBUG
-    if (thread_idx == 0)
-        printf("singular_integrand_thread for thread %d\n", thread_idx);
-#endif
     singular_potential<PType>(line_gauss_points[xsi_i], line_gauss_points[eta1_i], line_gauss_points[eta2_i],
                               line_gauss_points[eta3_i],
                               line_gauss_weights[xsi_i] * line_gauss_weights[eta1_i] * line_gauss_weights[eta2_i] *
@@ -264,6 +252,29 @@ inline __device__ void regular_integrand(float3 *trial_v,
 //     }
 //     return result;
 // }
+
+inline __device__ void identityIntegrand(const float3 *vertices, int3 tri, PitchedPtr<complex, 2> matrix)
+{
+    float3 v[3] = {{vertices[tri.x]}, {vertices[tri.y]}, {vertices[tri.z]}};
+    float w = 0.5 * jacobian(v);
+    float shape_func_factor[3];
+    float tri_gauss_points[6 * 2];
+    float tri_gauss_weights[6];
+    set_tri_gauss_params<6>(tri_gauss_points, tri_gauss_weights);
+    complex result[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 6; i++)
+    {
+        local_to_global(tri_gauss_points[i * 2], tri_gauss_points[i * 2 + 1], v, shape_func_factor);
+        float local_result = tri_gauss_weights[i] * w;
+        for (int ii = 0; ii < 3; ii++)
+            for (int jj = 0; jj < 3; jj++)
+                result[ii * 3 + jj] += local_result * shape_func_factor[ii] * shape_func_factor[jj];
+    }
+    int global_idx[3] = {tri.x, tri.y, tri.z};
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            atomicAddCpx(&matrix(global_idx[i], global_idx[j]), result[i * 3 + j]);
+}
 
 template <PotentialType PType, int GAUSS_NUM>
 inline __device__ void face2FaceIntegrandRegular(const float3 *vertices,
@@ -373,10 +384,6 @@ inline __device__ void face2FaceIntegrandSingular(const float3 *vertices,
         src_v2[idx] = src_v[i[idx]];
         trg_v2[idx] = trg_v[j[idx]];
     }
-#ifdef DEBUG
-    if (thread_idx == 0)
-        printf("face2FaceIntegrandSingular for thread %d\n", thread_idx);
-#endif
     singular_integrand_thread<PType, GAUSS_NUM>(src_v2, trg_v2, src_jacobian, trg_jacobian, k, neighbor_num,
                                                 triangle_norm(src_v), triangle_norm(trg_v), thread_idx, result_local);
     for (int ii = 0; ii < 3; ii++)

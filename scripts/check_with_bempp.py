@@ -28,6 +28,25 @@ print(triangles)
 cuda_bem = BEM_Solver(vertices, triangles)
 space = bempp.api.function_space(grid, "P", 1)
 
+
+identity = bempp.api.operators.boundary.sparse.identity(
+    space, space, space, device_interface="opencl", precision="single"
+)
+
+identity_matrix_bempp = torch.from_numpy(identity.weak_form().A.todense()).cuda()
+identity_matrix_cuda = cuda_bem.identity_matrix()
+
+rerr = torch.norm(identity_matrix_bempp - identity_matrix_cuda) / torch.norm(
+    identity_matrix_bempp
+)
+if rerr > 1e-4:
+    print(f"Relative error identity: {rerr}")
+    print("identity_matrix_cuda:")
+    print(identity_matrix_cuda)
+    print("identity_matrix_bempp:")
+    print(identity_matrix_bempp)
+
+
 for wave_number in [1, 10, 100]:
     print(f"Wave number: {wave_number}")
     beta = 1j / wave_number
@@ -36,7 +55,7 @@ for wave_number in [1, 10, 100]:
         space,
         space,
         wave_number,
-        device_interface="numba",
+        device_interface="opencl",
         precision="single",
     )
     single_matrix_bempp = torch.from_numpy(slp.weak_form().A).cuda()
@@ -45,7 +64,6 @@ for wave_number in [1, 10, 100]:
         single_matrix_bempp
     )
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error single layer: {rerr}")
         print("single_matrix_cuda:")
         print(single_matrix_cuda)
@@ -67,7 +85,6 @@ for wave_number in [1, 10, 100]:
         double_matrix_bempp
     )
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error double layer: {rerr}")
         print("double_matrix_cuda:")
         print(double_matrix_cuda)
@@ -93,7 +110,6 @@ for wave_number in [1, 10, 100]:
     ) / torch.norm(adjoint_double_matrix_bempp)
 
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error adjoint double layer: {rerr}")
         print("adjoint_double_matrix_cuda:")
         print(adjoint_double_matrix_cuda)
@@ -115,7 +131,6 @@ for wave_number in [1, 10, 100]:
     rerr = torch.norm(hyp_matrix_bempp - hyp_matrix_cuda) / torch.norm(hyp_matrix_bempp)
 
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error hypersingular: {rerr}")
         print("hyp_matrix_cuda:")
         print(hyp_matrix_cuda)
@@ -126,7 +141,6 @@ for wave_number in [1, 10, 100]:
     LHS_cuda = cuda_bem.assemble_boundary_matrix(wave_number, "bm_lhs")
     rerr = torch.norm(LHS_bempp - LHS_cuda) / torch.norm(LHS_bempp)
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error LHS: {rerr}")
         print("LHS_cuda:")
         print(LHS_cuda)
@@ -137,7 +151,6 @@ for wave_number in [1, 10, 100]:
     RHS_cuda = cuda_bem.assemble_boundary_matrix(wave_number, "bm_rhs")
     rerr = torch.norm(RHS_bempp - RHS_cuda) / torch.norm(RHS_bempp)
     if rerr > 1e-4:
-        print("triangles:", triangles)
         print(f"Relative error RHS: {rerr}")
         print("RHS_cuda:")
         print(RHS_cuda)

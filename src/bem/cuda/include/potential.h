@@ -51,6 +51,7 @@ HOST_DEVICE inline complex potential(float3 x, float3 y, float3 xn, float3 yn, f
     }
 }
 
+// for fast evaluation of the lhs of the boundary integral equation (repeated exp calculations is avoided)
 HOST_DEVICE inline void
 bm_lhs_potential(float3 x, float3 y, float3 xn, float3 yn, float k, complex &ret1, complex &ret2)
 {

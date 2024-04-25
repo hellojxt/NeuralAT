@@ -3,6 +3,7 @@ import os
 from glob import glob
 import torch
 from .BiCGSTAB import BiCGSTAB
+import numpy as np
 
 
 def load_cuda_imp(Debug=False, Verbose=False):
@@ -57,8 +58,21 @@ def preprocess(vertices, triangles):
     return normals, surface_curls_trans
 
 
+def solve_linear_equation(A_func, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
+    if callable(A_func):
+        solver = BiCGSTAB(A_func)
+    else:
+        solver = BiCGSTAB(lambda x: A_func @ x)
+    return solver.solve(b, x=x, nsteps=nsteps, tol=tol, atol=atol)
+
+
 class BEM_Solver:
     def __init__(self, vertices, triangles):
+        if isinstance(vertices, np.ndarray):
+            vertices = torch.from_numpy(vertices).cuda().float()
+        if isinstance(triangles, np.ndarray):
+            triangles = torch.from_numpy(triangles).cuda().int()
+
         check_tensor(vertices, torch.float32)
         check_tensor(triangles, torch.int32)
         self.vertices = vertices
@@ -80,13 +94,36 @@ class BEM_Solver:
     def identity_matrix(self):
         return cuda_imp.identity_matrix(self.vertices, self.triangles)
 
+    def CBIE(self, k, neumann):
+        identity = self.identity_matrix()
+        slp = self.assemble_boundary_matrix(k, "single")
+        dlp = self.assemble_boundary_matrix(k, "double")
 
-def solve_linear_equation(A_func, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
-    if callable(A_func):
-        solver = BiCGSTAB(A_func)
-    else:
-        solver = BiCGSTAB(lambda x: A_func @ x)
-    return solver.solve(b, x=x, nsteps=nsteps, tol=tol, atol=atol)
+        LHS = 0.5 * identity - dlp
+        RHS = -slp @ neumann
+        return solve_linear_equation(LHS, RHS)
+
+    def HBIE(self, k, neumann):
+        identity = self.identity_matrix()
+        slp = self.assemble_boundary_matrix(k, "single")
+        dlp = self.assemble_boundary_matrix(k, "double")
+        adlp = self.assemble_boundary_matrix(k, "adjointdouble")
+        hyp = self.assemble_boundary_matrix(k, "hypersingular")
+
+        beta = 1j / k
+        LHS = 0.5 * identity - dlp + beta * hyp
+        RHS = (-slp - beta * (adlp + 0.5 * identity)) @ neumann
+        return solve_linear_equation(LHS, RHS)
+
+    def neumann2dirichlet(self, k, neumann):
+        identity = self.identity_matrix()
+        beta = 1j / k
+        LHS = self.assemble_boundary_matrix(k, "bm_lhs", approx=True) + 0.5 * identity
+        RHS = (
+            self.assemble_boundary_matrix(k, "bm_rhs", approx=True)
+            - beta * 0.5 * identity
+        ) @ neumann
+        return solve_linear_equation(LHS, RHS)
 
 
 def get_potential_of_sources(x0, x1, n0, n1, wave_number, degree=0, grad=False):

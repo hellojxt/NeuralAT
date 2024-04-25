@@ -12,11 +12,11 @@ torch::Tensor identity_matrix(const torch::Tensor &vertices_, const torch::Tenso
     int vertices_size = vertices_.size(0);
     int triangles_size = triangles_.size(0);
     torch::Tensor matrix_ =
-        torch::zeros({triangles_size, triangles_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+        torch::zeros({vertices_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
     PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
     float3 *vertices = (float3 *)vertices_.data_ptr();
     int3 *triangles = (int3 *)triangles_.data_ptr();
-    parallel_for(triangles_size, [=] __device__(int i) { matrix(i, i) = jacobian(vertices, triangles[i]) * 0.5; });
+    parallel_for(triangles_size, [=] __device__(int i) { identityIntegrand(vertices, triangles[i], matrix); });
     return matrix_;
 }
 

@@ -1,13 +1,12 @@
-import os
 import meshio
 import numpy as np
 from .bempp import BEMModel
 from .mesh_process import tetra_from_mesh, update_triangle_normals
 from scipy.spatial import KDTree
 from .fem import FEMmodel, LOBPCG_solver, Material, MatSet
-from ..mcs.mcs import multipole
 import torch
 from numba import njit
+from skimage.metrics import structural_similarity as ssim
 
 
 def SNR(ground_truth, prediction):
@@ -18,35 +17,12 @@ def SNR(ground_truth, prediction):
     )
 
 
-from skimage.metrics import structural_similarity as ssim
-
-
 def complex_ssim(x, y):
     x = np.abs(x)
     y = np.abs(y)
     max_val = x.max()
     min_val = x.min()
     return ssim(x, y, data_range=max_val - min_val)
-
-
-class MultipoleModel:
-    def __init__(self, x0, n0, k, M):
-        self.x0 = torch.tensor(x0).float().cuda()
-        self.n0 = torch.tensor(n0).float().cuda()
-        self.k = k
-        self.M = M
-
-    def solve_dirichlet(self, points):
-        if isinstance(points, np.ndarray):
-            points = torch.tensor(points).float().cuda().reshape(-1, 3)
-        return multipole(self.x0, self.n0, points, points, self.k, self.M, False)
-
-    def solve_neumann(self, points, normals):
-        if isinstance(points, np.ndarray):
-            points = torch.tensor(points).float().cuda().reshape(-1, 3)
-        if isinstance(normals, np.ndarray):
-            normals = torch.tensor(normals).float().cuda().reshape(-1, 3)
-        return multipole(self.x0, self.n0, points, normals, self.k, self.M, True)
 
 
 @njit()

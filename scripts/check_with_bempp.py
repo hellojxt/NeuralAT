@@ -1,8 +1,5 @@
 """
 Compare the boundary matrices computed by Bempp and the CUDA BEM solver.
-
-!!! Note:   Hypersingular operator is not tested here because the implementation 
-            of the hypersingular operator in Bempp is different from the CUDA BEM solver.
 """
 
 import sys
@@ -25,6 +22,14 @@ print(vertices)
 triangles = torch.from_numpy(grid.elements.T.astype("int32")).cuda()
 print(triangles)
 
+check_points = torch.tensor(
+    [
+        [0.0, 0.0, 2.0],
+        [0.0, 2.0, 0.0],
+        [2.0, 0.0, 0.0],
+    ]
+)
+check_points = check_points.float().cuda()
 cuda_bem = BEM_Solver(vertices, triangles)
 space = bempp.api.function_space(grid, "P", 1)
 
@@ -156,3 +161,60 @@ for wave_number in [1, 10, 100]:
         print(RHS_cuda)
         print("RHS_bempp:")
         print(RHS_bempp)
+
+    single_potential = bempp.api.operators.potential.helmholtz.single_layer(
+        space,
+        check_points.T.cpu().numpy(),
+        wave_number,
+        device_interface="opencl",
+        precision="single",
+    )
+
+    grid_fun = bempp.api.GridFunction(
+        space, coefficients=np.random.rand(space.global_dof_count)
+    )
+    single_potential_bempp = torch.from_numpy(single_potential * grid_fun).cuda()
+
+    single_potential_cuda = cuda_bem.single_potential(
+        wave_number,
+        torch.from_numpy(grid_fun.coefficients).cuda().to(torch.complex64),
+        check_points,
+    )
+
+    rerr = torch.norm(single_potential_bempp - single_potential_cuda) / torch.norm(
+        single_potential_bempp
+    )
+
+    if rerr > 1e-4:
+        print(f"Relative error single potential: {rerr}")
+        print("single_potential_cuda:")
+        print(single_potential_cuda)
+        print("single_potential_bempp:")
+        print(single_potential_bempp)
+
+    double_potential = bempp.api.operators.potential.helmholtz.double_layer(
+        space,
+        check_points.T.cpu().numpy(),
+        wave_number,
+        device_interface="opencl",
+        precision="single",
+    )
+
+    double_potential_bempp = torch.from_numpy(double_potential * grid_fun).cuda()
+
+    double_potential_cuda = cuda_bem.double_potential(
+        wave_number,
+        torch.from_numpy(grid_fun.coefficients).cuda().to(torch.complex64),
+        check_points,
+    )
+
+    rerr = torch.norm(double_potential_bempp - double_potential_cuda) / torch.norm(
+        double_potential_bempp
+    )
+
+    if rerr > 1e-4:
+        print(f"Relative error double potential: {rerr}")
+        print("double_potential_cuda:")
+        print(double_potential_cuda)
+        print("double_potential_bempp:")
+        print(double_potential_bempp)

@@ -28,7 +28,7 @@ def load_cuda_imp(Debug=False, Verbose=False):
     )
 
 
-cuda_imp = load_cuda_imp(Debug=False, Verbose=True)
+cuda_imp = load_cuda_imp(Debug=False, Verbose=False)
 
 
 def check_tensor(tensor, dtype):
@@ -124,6 +124,30 @@ class BEM_Solver:
             - beta * 0.5 * identity
         ) @ neumann
         return solve_linear_equation(LHS, RHS)
+
+    def triangle2vertex(self, neumann):
+        return cuda_imp.triangle2vertex(self.vertices, self.triangles, neumann)
+
+    def single_potential(self, k, neumann, points):
+        return (
+            cuda_imp.single_boundary_potential(self.vertices, self.triangles, points, k)
+            @ neumann
+        )
+
+    def double_potential(self, k, dirichlet, points):
+        return (
+            cuda_imp.double_boundary_potential(self.vertices, self.triangles, points, k)
+            @ dirichlet
+        )
+
+    def boundary2potential(self, k, neumann, dirichlet, points):
+        slp = cuda_imp.single_boundary_potential(
+            self.vertices, self.triangles, points, k
+        )
+        dlp = cuda_imp.double_boundary_potential(
+            self.vertices, self.triangles, points, k
+        )
+        return -slp @ neumann + dlp @ dirichlet
 
 
 def get_potential_of_sources(x0, x1, n0, n1, wave_number, degree=0, grad=False):

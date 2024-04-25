@@ -234,24 +234,25 @@ inline __device__ void regular_integrand(float3 *trial_v,
         }
 }
 
-// template <PotentialType PType, int TRI_GAUSS_NUM>
-// inline __device__ complex potential_integrand(float3 point, float3 *src_v, float src_jacobian, float s)
-// {
-//     float tri_gauss_points[TRI_GAUSS_NUM * 2];
-//     float tri_gauss_weights[TRI_GAUSS_NUM];
-//     set_tri_gauss_params<TRI_GAUSS_NUM>(tri_gauss_points, tri_gauss_weights);
-//     complex result = 0;
-//     float3 src_norm = triangle_norm(src_v);
-//     float3 trg_norm = {0, 0, 0};
-
-//     for (int i = 0; i < TRI_GAUSS_NUM; i++)
-//     {
-//         float3 v_in_tri = local_to_global(tri_gauss_points[i * 2], tri_gauss_points[i * 2 + 1], src_v);
-//         result += 0.5 * tri_gauss_weights[i] * src_jacobian * potential<PType>(v_in_tri, point, src_norm, trg_norm,
-//         s);
-//     }
-//     return result;
-// }
+template <PotentialType PType, int TRI_GAUSS_NUM>
+inline __device__ void potential_integrand(float3 point, float3 *src_v, float src_jacobian, float s, complex *result)
+{
+    float tri_gauss_points[TRI_GAUSS_NUM * 2];
+    float tri_gauss_weights[TRI_GAUSS_NUM];
+    set_tri_gauss_params<TRI_GAUSS_NUM>(tri_gauss_points, tri_gauss_weights);
+    float3 src_norm = triangle_norm(src_v);
+    float3 trg_norm = {0, 0, 0};
+    float shape_func_factor[3];
+    float w1 = 0.5 * src_jacobian;
+    for (int i = 0; i < TRI_GAUSS_NUM; i++)
+    {
+        float3 v_in_tri =
+            local_to_global(tri_gauss_points[i * 2], tri_gauss_points[i * 2 + 1], src_v, shape_func_factor);
+        complex local_result = w1 * tri_gauss_weights[i] * potential<PType>(point, v_in_tri, trg_norm, src_norm, s);
+        for (int ii = 0; ii < 3; ii++)
+            result[ii] += local_result * shape_func_factor[ii];
+    }
+}
 
 inline __device__ void identityIntegrand(const float3 *vertices, int3 tri, PitchedPtr<complex, 2> matrix)
 {
@@ -392,12 +393,16 @@ inline __device__ void face2FaceIntegrandSingular(const float3 *vertices,
     result[9] = result_local[9];
 }
 
-// template <PotentialType PType, int GAUSS_NUM>
-// inline __device__ complex face2PointIntegrand(const float3 *vertices, int3 src, float3 trg, float k)
-// {
-//     float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
-//     float src_jacobian = jacobian(src_v);
-//     return potential_integrand<PType, GAUSS_NUM>(trg, src_v, src_jacobian, k);
-// }
+template <PotentialType PType, int GAUSS_NUM>
+inline __device__ complex face2PointIntegrand(const float3 *vertices, int3 src, float3 trg, float k, complex *mat_row)
+{
+    float3 src_v[3] = {{vertices[src.x]}, {vertices[src.y]}, {vertices[src.z]}};
+    float src_jacobian = jacobian(src_v);
+    complex result[3] = {0, 0, 0};
+    potential_integrand<PType, GAUSS_NUM>(trg, src_v, src_jacobian, k, result);
+    int global_idx[3] = {src.x, src.y, src.z};
+    for (int i = 0; i < 3; i++)
+        atomicAddCpx(&mat_row[global_idx[i]], result[i]);
+}
 
 BEM_NAMESPACE_END

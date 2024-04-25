@@ -20,6 +20,32 @@ torch::Tensor identity_matrix(const torch::Tensor &vertices_, const torch::Tenso
     return matrix_;
 }
 
+torch::Tensor triangle2vertex(const torch::Tensor &vertices_,
+                              const torch::Tensor &triangles_,
+                              const torch::Tensor neumann_)
+{
+    int vertices_size = vertices_.size(0);
+    int triangles_size = triangles_.size(0);
+    torch::Tensor vertex_neumann_ =
+        torch::zeros({vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    complex *vertex_neumann = (complex *)vertex_neumann_.data_ptr();
+    float3 *vertices = (float3 *)vertices_.data_ptr();
+    int3 *triangles = (int3 *)triangles_.data_ptr();
+    complex *neumann = (complex *)neumann_.data_ptr();
+    torch::Tensor vertex_triangle_count_ =
+        torch::zeros({vertices_size}, torch::dtype(torch::kInt).device(torch::kCUDA));
+    int *vertex_triangle_count = (int *)vertex_triangle_count_.data_ptr();
+    parallel_for(triangles_size, [=] __device__(int i) {
+        atomicAddCpx(&vertex_neumann[triangles[i].x], neumann[i]);
+        atomicAddCpx(&vertex_neumann[triangles[i].y], neumann[i]);
+        atomicAddCpx(&vertex_neumann[triangles[i].z], neumann[i]);
+        atomicAdd(&vertex_triangle_count[triangles[i].x], 1);
+        atomicAdd(&vertex_triangle_count[triangles[i].y], 1);
+        atomicAdd(&vertex_triangle_count[triangles[i].z], 1);
+    });
+    parallel_for(vertices_size, [=] __device__(int i) { vertex_neumann[i] /= vertex_triangle_count[i]; });
+    return vertex_neumann_;
+}
 template <PotentialType type, int LineGaussNum, int TriGaussNum>
 torch::Tensor assemble_matrix(const torch::Tensor &vertices_,
                               const torch::Tensor &triangles_,
@@ -127,29 +153,26 @@ torch::Tensor assemble_matrix(const torch::Tensor &vertices_,
     return matrix_;
 }
 
-template <PotentialType type>
-torch::Tensor solve_potential(const torch::Tensor x0_,
-                              const torch::Tensor x1_,
-                              const torch::Tensor n0_,
-                              const torch::Tensor n1_,
-                              const float wave_number)
+template <PotentialType type, int TriGaussNum>
+torch::Tensor assemble_potential_matrix(const torch::Tensor &vertices_,
+                                        const torch::Tensor &triangles_,
+                                        const torch::Tensor &points_,
+                                        const float wave_number)
 {
-    int size0 = x0_.size(0);
-    int size1 = x1_.size(0);
-    float3 *x0 = (float3 *)x0_.data_ptr();
-    float3 *x1 = (float3 *)x1_.data_ptr();
-    float3 *n0 = (float3 *)n0_.data_ptr();
-    float3 *n1 = (float3 *)n1_.data_ptr();
-    torch::Tensor result_ = torch::zeros({size1}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
-    complex *result = (complex *)result_.data_ptr();
-    parallel_for_block(size0, 512, [=] __device__(int i, int j) {
-        for (int k = j; k < size1; k += blockDim.x)
-        {
-            auto local_result = potential<type>(x0[i], x1[k], n0[i], n1[k], wave_number);
-            atomicAddCpx(&result[k], local_result);
-        }
+    float3 *vertices = (float3 *)vertices_.data_ptr();
+    int3 *triangles = (int3 *)triangles_.data_ptr();
+    float3 *points = (float3 *)points_.data_ptr();
+    int vertices_size = vertices_.size(0);
+    int triangles_size = triangles_.size(0);
+    int points_size = points_.size(0);
+    torch::Tensor matrix_ =
+        torch::zeros({points_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
+    PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
+    parallel_for_block(points_size, 512, [=] __device__(int i, int j) {
+        for (int k = j; k < triangles_size; k += blockDim.x)
+            face2PointIntegrand<type, TriGaussNum>(vertices, triangles[k], points[i], wave_number, &matrix(i, 0));
     });
-    return result_;
+    return matrix_;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
@@ -191,10 +214,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("bm_rhs_boundary_matrix_approx_1", &assemble_matrix<bem::BM_RHS, 2, 1>,
           "Assemble BM RHS matrix with 1 gauss points");
     m.def("identity_matrix", &identity_matrix, "Assemble identity matrix");
-    m.def("single_boundary_potential", &solve_potential<bem::SINGLE_LAYER>, "Solve single layer potential");
-    m.def("double_boundary_potential", &solve_potential<bem::DOUBLE_LAYER>, "Solve double layer potential");
-    m.def("hypersingular_boundary_potential", &solve_potential<bem::HYPER_SINGULAR_LAYER>,
-          "Solve hypersingular layer potential");
-    m.def("adjointdouble_boundary_potential", &solve_potential<bem::ADJOINT_DOUBLE_LAYER>,
-          "Solve adjoint double layer potential");
+    m.def("triangle2vertex", &triangle2vertex, "Assemble triangle to vertex");
+
+    m.def("single_boundary_potential", &assemble_potential_matrix<bem::SINGLE_LAYER, 6>,
+          "Assemble single layer potential matrix with 6 gauss points");
+    m.def("double_boundary_potential", &assemble_potential_matrix<bem::DOUBLE_LAYER, 6>,
+          "Assemble double layer potential matrix with 6 gauss points");
 }

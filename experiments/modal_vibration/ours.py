@@ -4,7 +4,7 @@ sys.path.append("./")
 import torch
 from src.mcs.mcs import ImportanceSampler, MonteCarloWeight
 from src.timer import Timer
-from src.modalsound.model import (
+from src.modalobj.model import (
     solve_points_dirichlet,
     MultipoleModel,
     MeshObj,

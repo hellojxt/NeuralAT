@@ -9,7 +9,6 @@ HBIE_cuda = np.loadtxt(f"{DATA_DIR}/HBIE_cuda.txt")
 CBIE_cuda = np.loadtxt(f"{DATA_DIR}/CBIE_cuda.txt")
 HBIE_cuda_approx = np.loadtxt(f"{DATA_DIR}/HBIE_cuda_approx.txt")
 
-HBIE_bempp[:, 2] += CBIE_bempp[:, 2]
 
 plt.figure()
 label_list = ["HBIE Bempp", "CBIE Bempp", "HBIE CUDA", "CBIE CUDA", "HBIE CUDA Approx"]
@@ -30,7 +29,9 @@ plt.close()
 plt.figure()
 
 for idx in range(len(data_list)):
-    plt.plot(data_list[idx][:, 0], data_list[idx][:, 2], label=label_list[idx])
+    wave_number = data_list[idx][:, 0]
+    freqs = wave_number / (2 * np.pi) * 343.3
+    plt.plot(freqs, data_list[idx][:, 2], label=label_list[idx])
 
 plt.xlabel(f"Frequency")
 plt.ylabel(f"Time cost (s)")

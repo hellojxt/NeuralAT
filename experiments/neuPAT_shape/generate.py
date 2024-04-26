@@ -10,7 +10,7 @@ from src.mcs.mcs import (
 from src.utils import plot_point_cloud, plot_mesh, CombinedFig
 from src.solver import BiCGSTAB_batch
 from src.ffat_solve import bem_solve, monte_carlo_solve
-from src.modalsound.model import get_spherical_surface_points, complex_ssim, SNR
+from src.modalobj.model import get_spherical_surface_points, complex_ssim, SNR
 import numpy as np
 import os
 from glob import glob

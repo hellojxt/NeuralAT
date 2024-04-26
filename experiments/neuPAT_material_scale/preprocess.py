@@ -2,15 +2,9 @@ import sys
 
 sys.path.append("./")
 
-from src.modalsound.model import (
-    ModalSoundObj,
-    MatSet,
-    Material,
-    BEMModel,
-    MeshObj,
-    get_spherical_surface_points,
-)
-from src.mcs.mcs import ImportanceSampler
+from src.modalobj.model import VibrationObj, MatSet, Material
+from src.bem.solver import map_triangle2vertex
+from src.utils import Visualizer
 import numpy as np
 import torch
 
@@ -27,18 +21,20 @@ for obj in vibration_objects:
     size = obj.get("size")
     material = obj.get("material")
     mode_num = obj.get("mode_num")
-    obj_vib = ModalSoundObj(f"{data_dir}/{mesh}")
+    obj_vib = VibrationObj(f"{data_dir}/{mesh}")
     obj_vib.normalize(size)
     obj_vib.modal_analysis(k=mode_num, material=Material(getattr(MatSet, material)))
-    print(obj_vib.get_frequencies())
 
 vertices_vib = torch.from_numpy(obj_vib.surf_vertices).cuda().to(torch.float32)
 triangles_vib = torch.from_numpy(obj_vib.surf_triangles).cuda().to(torch.int32)
 
-neumann_tri = np.zeros((mode_num, len(triangles_vib)), dtype=np.complex64)
+neumann_vtx = torch.zeros(mode_num, len(vertices_vib), dtype=torch.complex64).cuda()
 wave_number = []
 for i in range(mode_num):
-    neumann_tri[i] = obj_vib.get_triangle_neumann(i)
+    neumann_tri = (
+        torch.from_numpy(obj_vib.get_triangle_neumann(i)).cuda().to(torch.complex64)
+    )
+    neumann_vtx[i] = map_triangle2vertex(vertices_vib, triangles_vib, neumann_tri)
     wave_number.append(-obj_vib.get_wave_number(i))
 
 import meshio
@@ -50,13 +46,12 @@ meshio.write_points_cells(
     [("triangle", triangles_vib.cpu().numpy())],
 )
 
-neumann_tri = torch.from_numpy(neumann_tri).cuda()
 ks = torch.tensor(wave_number).to(torch.float32).cuda()
 torch.save(
     {
         "vertices": vertices_vib,
         "triangles": triangles_vib,
-        "neumann_tri": neumann_tri,
+        "neumann_vtx": neumann_vtx,
         "ks": ks,
         "eigenvalues": obj_vib.eigenvalues,
         "modes": obj_vib.modes,

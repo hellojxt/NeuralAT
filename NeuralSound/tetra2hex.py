@@ -11,7 +11,7 @@ from classic.voxelize.hexahedral import Hexa_model
 from classic.fem.util import to_sparse_coords
 from classic.bem.util import boundary_encode, boundary_voxel
 from src.utils import CombinedFig
-from src.modalsound.model import MeshObj
+from src.modalobj.model import MeshObj
 from scipy.spatial import KDTree
 from torch_geometric.nn.unpool import knn_interpolate
 from time import time

@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("./")
 
-from src.modalsound.model import (
+from src.modalobj.model import (
     ModalSoundObj,
     MatSet,
     Material,

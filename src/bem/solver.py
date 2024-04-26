@@ -58,7 +58,7 @@ def preprocess(vertices, triangles):
     return normals, surface_curls_trans
 
 
-def solve_linear_equation(A_func, b, x=None, nsteps=None, tol=1e-10, atol=1e-16):
+def solve_linear_equation(A_func, b, x=None, nsteps=500, tol=1e-10, atol=1e-16):
     if callable(A_func):
         solver = BiCGSTAB(A_func)
     else:
@@ -125,9 +125,6 @@ class BEM_Solver:
         ) @ neumann
         return solve_linear_equation(LHS, RHS)
 
-    def triangle2vertex(self, neumann):
-        return cuda_imp.triangle2vertex(self.vertices, self.triangles, neumann)
-
     def single_potential(self, k, neumann, points):
         return (
             cuda_imp.single_boundary_potential(self.vertices, self.triangles, points, k)
@@ -148,6 +145,13 @@ class BEM_Solver:
             self.vertices, self.triangles, points, k
         )
         return -slp @ neumann + dlp @ dirichlet
+
+
+def map_triangle2vertex(vertices, triangles, features):
+    check_tensor(vertices, torch.float32)
+    check_tensor(triangles, torch.int32)
+    check_tensor(features, torch.complex64)
+    return cuda_imp.triangle2vertex(vertices, triangles, features)
 
 
 def get_potential_of_sources(x0, x1, n0, n1, wave_number, degree=0, grad=False):

@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("./")
 from src.timer import Timer
-from src.modalsound.model import (
+from src.modalobj.model import (
     SNR,
     complex_ssim,
 )
@@ -39,9 +39,7 @@ from matplotlib.gridspec import GridSpec
 # Assuming the other parts of your script are already defined (ffat_map_bem, our_maps, snrs, ssims, data_dir)
 
 # Load specific font
-font_path = (
-    "dataset/fonts/LinBiolinum_R.ttf"  # Replace with your font file path
-)
+font_path = "dataset/fonts/LinBiolinum_R.ttf"  # Replace with your font file path
 font_bold_path = "dataset/fonts/LinBiolinum_RB.ttf"  # Replace with your font file path
 font_size = 35
 my_font = FontProperties(fname=font_path)

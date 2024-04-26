@@ -9,7 +9,7 @@ from tqdm import tqdm
 import json
 from src.timer import Timer
 import os
-from src.modalsound.model import get_spherical_surface_points, BEMModel
+from src.modalobj.model import get_spherical_surface_points, BEMModel
 from src.mcs.mcs import (
     ImportanceSampler,
     MonteCarloWeight,

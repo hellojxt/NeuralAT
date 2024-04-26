@@ -5,7 +5,7 @@ sys.path.append("./")
 import torch
 from src.mcs.mcs import FDTDSimulator, get_bound_info
 from src.utils import CombinedFig
-from src.modalsound.model import MeshObj
+from src.modalobj.model import MeshObj
 from src.timer import Timer
 import os
 import time

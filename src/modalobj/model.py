@@ -1,12 +1,12 @@
 import meshio
 import numpy as np
-from .bempp import BEMModel
 from .mesh_process import tetra_from_mesh, update_triangle_normals
 from scipy.spatial import KDTree
 from .fem import FEMmodel, LOBPCG_solver, Material, MatSet
 import torch
 from numba import njit
 from skimage.metrics import structural_similarity as ssim
+from ..bem.solver import map_triangle2vertex
 
 
 def SNR(ground_truth, prediction):
@@ -77,7 +77,7 @@ def get_spherical_surface_points(vertices, scale=2):
     return points
 
 
-class MeshObj:
+class StaticObj:
     def __init__(self, mesh_path, scale=0.15):
         mesh = meshio.read(mesh_path)
         self.vertices = mesh.points
@@ -89,22 +89,13 @@ class MeshObj:
             * scale
         )
         self.triangles = mesh.cells_dict["triangle"]
-        self.triangles_normal = update_normals(self.vertices, self.triangles)
-        self.triangles_center = self.vertices[self.triangles].mean(axis=1)
         self.bbox_min = self.vertices.min(axis=0)
         self.bbox_max = self.vertices.max(axis=0)
         self.center = (self.bbox_max + self.bbox_min) / 2
         self.size = (self.bbox_max - self.bbox_min).max()
 
-    def spherical_surface_points(self, scale=2):
-        points = unit_sphere_surface_points(32)
-        points = points.reshape(-1, 3)
-        points = points * self.size * scale + self.center
-        points = torch.tensor(points).float().cuda()
-        return points
 
-
-class ModalSoundObj:
+class VibrationObj:
     def __init__(self, mesh_path):
         (
             self.vertices,
@@ -118,13 +109,6 @@ class ModalSoundObj:
             self.surf_vertices, self.surf_triangles
         )
 
-    def spherical_surface_points(self, scale=2):
-        points = unit_sphere_surface_points(32)
-        points = points.reshape(-1, 3)
-        points = points * self.size * scale + self.center
-        points = torch.tensor(points).float().cuda()
-        return points
-
     def normalize(self, scale=1.0):
         self.vertices = (self.vertices - (self.bbox_max + self.bbox_min) / 2) / (
             self.bbox_max - self.bbox_min
@@ -133,7 +117,6 @@ class ModalSoundObj:
         self.surf_vertices = (
             self.surf_vertices - (self.bbox_max + self.bbox_min) / 2
         ) / (self.bbox_max - self.bbox_min).max()
-
         self.surf_vertices = self.surf_vertices * scale
         self.bbox_min = self.vertices.min(axis=0)
         self.bbox_max = self.vertices.max(axis=0)
@@ -158,12 +141,6 @@ class ModalSoundObj:
         triangle_neumann = (triangle_neumann * self.surf_normals).sum(axis=1)
         return triangle_neumann
 
-    def get_triangle_neumanns(self, mode_ids):
-        data = np.zeros((self.surf_triangles.shape[0], len(mode_ids)))
-        for i, mode_id in enumerate(mode_ids):
-            data[:, i] = self.get_triangle_neumann(mode_id)
-        return data
-
     def get_frequencies(self):
         return self.eigenvalues**0.5 / (2 * np.pi)
 
@@ -175,24 +152,3 @@ class ModalSoundObj:
 
     def get_wave_number(self, mode_id):
         return self.get_omega(mode_id) / 343.2
-
-    def solve_by_BEM(self, mode_id, tol=1e-6, maxiter=2000):
-        triangle_neumann = self.get_triangle_neumann(mode_id)
-        bem_model = BEMModel(
-            self.surf_vertices,
-            self.surf_triangles,
-            self.get_wave_number(mode_id),
-        )
-        residual = bem_model.boundary_equation_solve(triangle_neumann, tol, maxiter)
-        if len(residual) == 0:
-            return bem_model, 0
-        return bem_model, residual[-1]
-
-
-def solve_points_dirichlet(
-    vertices, triangles, neumann, dirichlet, wave_number, points
-):
-    bem_model = BEMModel(vertices, triangles, wave_number)
-    bem_model.set_dirichlet(dirichlet)
-    bem_model.set_neumann(neumann)
-    return bem_model.potential_solve(points)

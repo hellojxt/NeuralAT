@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("./")
 
-from src.modalsound.model import SNR, complex_ssim
+from src.modalobj.model import SNR, complex_ssim
 import numpy as np
 
 import matplotlib.pyplot as plt

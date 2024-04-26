@@ -18,9 +18,9 @@ CBIE_cuda = []
 HBIE_cuda = []
 HBIE_cuda_approx = []
 
-for idx in range(80):
-    # wave_number = 100.6 + 0.01 * idx
-    wave_number = 5 + 5 * idx
+for idx in range(20):
+    wave_number = 100.6 + 0.01 * idx
+    # wave_number = 5 + 5 * idx
     k = -wave_number
 
     @bempp.api.complex_callable
@@ -40,15 +40,23 @@ for idx in range(80):
 
     wavelength = 2 * np.pi / abs(k)
     h = wavelength / 6
-    grid = bempp.api.shapes.ellipsoid(0.15, 0.05, 0.05, h=h)
+    grid = bempp.api.shapes.ellipsoid(0.15, 0.05, 0.05, h=h * 4)
     space = bempp.api.function_space(grid, "P", 1)
 
-    identity = bempp.api.operators.boundary.sparse.identity(space, space, space)
-    slp = bempp.api.operators.boundary.helmholtz.single_layer(space, space, space, k)
-    dlp = bempp.api.operators.boundary.helmholtz.double_layer(space, space, space, k)
-    hyp = bempp.api.operators.boundary.helmholtz.hypersingular(space, space, space, k)
+    identity = bempp.api.operators.boundary.sparse.identity(
+        space, space, space, device_interface="opencl", precision="single"
+    )
+    slp = bempp.api.operators.boundary.helmholtz.single_layer(
+        space, space, space, k, device_interface="opencl", precision="single"
+    )
+    dlp = bempp.api.operators.boundary.helmholtz.double_layer(
+        space, space, space, k, device_interface="opencl", precision="single"
+    )
+    hyp = bempp.api.operators.boundary.helmholtz.hypersingular(
+        space, space, space, k, device_interface="opencl", precision="single"
+    )
     adlp = bempp.api.operators.boundary.helmholtz.adjoint_double_layer(
-        space, space, space, k
+        space, space, space, k, device_interface="opencl", precision="single"
     )
 
     neumann_fun = bempp.api.GridFunction(space, fun=get_neumann)
@@ -61,11 +69,14 @@ for idx in range(80):
     )
 
     t = Timer()
+    t_asm = Timer()
     LHS = 0.5 * identity - dlp
     RHS = -slp
-
     RHS = RHS * neumann_fun
-    dirichlet_fun, info = bempp.api.linalg.gmres(LHS, RHS, tol=1e-5)
+    bempp_tc1 = t_asm.get_time_cost()
+    dirichlet_fun, info = bempp.api.linalg.gmres(
+        LHS, RHS, tol=1e-5, use_strong_form=True, maxiter=1000
+    )
     tc = t.get_time_cost()
 
     cuda_bem = BEM_Solver(grid.vertices.T, grid.elements.T.astype("int32"))
@@ -97,7 +108,7 @@ for idx in range(80):
         dirichlet_fun.coefficients - dirichlet_fun_gt.coefficients
     ) / np.linalg.norm(dirichlet_fun_gt.coefficients)
 
-    HBIE_bempp.append([wave_number, rerr, tc])
+    HBIE_bempp.append([wave_number, rerr, tc + bempp_tc1])
 
     t = Timer()
     dirichlet_coeff_cuda = cuda_bem.HBIE(k, neumann_coeff)

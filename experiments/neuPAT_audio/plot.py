@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("./")
 from src.timer import Timer
-from src.modalsound.model import (
+from src.modalobj.model import (
     SNR,
     complex_ssim,
 )

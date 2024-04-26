@@ -98,10 +98,10 @@ class BiCGSTAB:
             # print(self.x)
             iter_count += 1
             if s:
-                print(f"Converged in {iter_count} steps")
+                # print(f"Converged in {iter_count} steps")
                 return self.x
             if self.rho == 0:
                 break
             self.nsteps -= 1
-        warnings.warn("Convergence has failed :(")
+        # warnings.warn("Convergence has failed :(")
         return self.x

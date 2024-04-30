@@ -37,6 +37,13 @@ def forward_fun(items):
     start_time = time()
     bcoords, feats_in, feats_in_norm, feats_out, feats_out_norm, filename = items
     print(filename[0])
+    print(
+        bcoords.shape,
+        feats_in.shape,
+        feats_in_norm.shape,
+        feats_out.shape,
+        feats_out_norm.shape,
+    )
     ffat_map, ffat_norm = Config.net(bcoords, feats_in)
     ffat_norm = (ffat_norm * 3 - 8).exp()
     cost_time = time() - start_time

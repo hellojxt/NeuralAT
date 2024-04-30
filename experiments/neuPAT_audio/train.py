@@ -7,7 +7,6 @@ from glob import glob
 import torch
 from tqdm import tqdm
 import json
-from src.timer import Timer
 import os
 
 data_dir = sys.argv[1]
@@ -16,8 +15,7 @@ xs = []
 ys = []
 for data_points in data_points_lst:
     data = torch.load(data_points)
-    # remove channel 0 and 2 in "x"
-    x = data["x"][:, :, [1, 3, 4, 5, 6]].reshape(-1, 5)
+    x = data["x"].reshape(-1, 5)
     y = data["y"].reshape(-1, 1)
     xs.append(x)
     ys.append(y)
@@ -26,10 +24,10 @@ xs = torch.cat(xs, dim=0)
 ys = torch.cat(ys, dim=0)
 ys = ((ys + 10e-6) / 10e-6).log10()
 
-xs_train = xs[: int(len(xs) * 0.8)].cuda()
-ys_train = ys[: int(len(ys) * 0.8)].cuda()
-xs_test = xs[int(len(xs) * 0.8) :].cuda()
-ys_test = ys[int(len(ys) * 0.8) :].cuda()
+xs_train = xs[: int(len(xs) * 0.9)].cuda()
+ys_train = ys[: int(len(ys) * 0.9)].cuda()
+xs_test = xs[int(len(xs) * 0.9) :].cuda()
+ys_test = ys[int(len(ys) * 0.9) :].cuda()
 del xs, ys
 
 with open(f"{data_dir}/net.json", "r") as file:

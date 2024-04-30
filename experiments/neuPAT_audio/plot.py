@@ -1,7 +1,6 @@
 import sys
 
 sys.path.append("./")
-from src.timer import Timer
 from src.modalobj.model import (
     SNR,
     complex_ssim,
@@ -32,8 +31,6 @@ ffat_map_neuPAT = np.load(f"{data_dir}/neuPAT.npz")["ffat_map"].reshape(-1, 64, 
 ffat_map_neuPAT = (10**ffat_map_neuPAT) * 10e-6 - 10e-6
 cost_time_neuPAT = np.load(f"{data_dir}/neuPAT.npz")["cost_time"]
 
-ffat_map_ours = np.load(f"{data_dir}/ours.npz")["ffat_map"].reshape(-1, 64, 32)
-cost_time_ours = np.load(f"{data_dir}/ours.npz")["cost_time"]
 ffat_map_bem = np.load(f"{data_dir}/bem.npz")["ffat_map"].reshape(-1, 64, 32)
 cost_time_bem = np.load(f"{data_dir}/bem.npz")["cost_time"]
 points = np.load(f"{data_dir}/bem.npz")["points"]
@@ -138,22 +135,6 @@ plt.axis("off")
 #     f"NeuralSound: {np.mean(SNRs):.2f} | {np.mean(SSIMs):.2f} | {cost_time_NeuralSound:.3f}"
 # )
 
-# Plot other images and add titles
-ax = plt.subplot(gs[3])
-ax.imshow(
-    np.abs(ffat_map_ours[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
-)
-ax.text(
-    16,
-    70,
-    f"{SNR(ffat_map_ours[index], ffat_map_bem[index]):.2f} | {complex_ssim(ffat_map_ours[index], ffat_map_bem[index]):.2f}",
-    ha="center",
-    fontproperties=my_font,
-    fontsize=font_size,
-)
-if len(sys.argv) > 2:
-    plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
-plt.axis("off")
 
 # SNRs = []
 # SSIMs = []
@@ -162,7 +143,7 @@ plt.axis("off")
 #     SSIMs.append(complex_ssim(ffat_map_ours[i], ffat_map_bem[i]))
 # print(f"Ours: {np.mean(SNRs):.2f} | {np.mean(SSIMs):.2f} | {cost_time_ours:.3f}")
 
-ax = plt.subplot(gs[4])
+ax = plt.subplot(gs[3])
 ax.imshow(
     np.abs(ffat_map_neuPAT[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
 )

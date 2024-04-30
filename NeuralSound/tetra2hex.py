@@ -10,8 +10,7 @@ from tqdm import tqdm
 from classic.voxelize.hexahedral import Hexa_model
 from classic.fem.util import to_sparse_coords
 from classic.bem.util import boundary_encode, boundary_voxel
-from src.utils import CombinedFig
-from src.modalobj.model import MeshObj
+from src.utils import Visualizer
 from scipy.spatial import KDTree
 from torch_geometric.nn.unpool import knn_interpolate
 from time import time
@@ -51,7 +50,7 @@ def get_mesh_size(vertices):
 
 
 def run():
-    for obj_path in obj_dir:
+    for obj_path in tqdm(obj_dir):
         if not os.path.isdir(obj_path):
             continue
         data = np.load(obj_path + "/bem.npz")
@@ -64,12 +63,11 @@ def run():
         freqs = wave_number * 343.2 / (2 * np.pi)
 
         mode_num = len(wave_number)
-        neumann = data["neumann"].reshape(mode_num, -1, 1)
+        neumann_vtx = data["neumann"].reshape(mode_num, -1, 1)
+        neumann = neumann_vtx[:, triangles].mean(axis=2)
         neumann = neumann * normals
-
         neumann = torch.from_numpy(neumann)
         neumann = neumann.permute(1, 2, 0).cpu().numpy()
-
         start_time = time()
 
         hexa = Hexa_model(vertices, triangles, res=32)
@@ -93,7 +91,6 @@ def run():
         ffat_map, ffat_map_far = np.zeros(
             (mode_num, 2 * image_size, image_size)
         ), np.zeros((mode_num, 2 * image_size, image_size))
-        print(cost_time)
         out_path = obj_path + "/voxel.npz"
         np.savez_compressed(
             out_path,
@@ -107,5 +104,4 @@ def run():
         )
 
 
-run()
 run()

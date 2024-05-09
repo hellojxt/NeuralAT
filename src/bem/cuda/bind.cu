@@ -13,7 +13,7 @@ torch::Tensor identity_matrix(const torch::Tensor &vertices_, const torch::Tenso
     int triangles_size = triangles_.size(0);
     torch::Tensor matrix_ =
         torch::zeros({vertices_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
-    PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
+    CudaTensor<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
     float3 *vertices = (float3 *)vertices_.data_ptr();
     int3 *triangles = (int3 *)triangles_.data_ptr();
     parallel_for(triangles_size, [=] __device__(int i) { identityIntegrand(vertices, triangles[i], matrix); });
@@ -60,8 +60,8 @@ torch::Tensor assemble_matrix(const torch::Tensor &vertices_,
     int triangles_size = triangles_.size(0);
     torch::Tensor matrix_ =
         torch::zeros({vertices_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
-    PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
-    PitchedPtr<float, 3> surface_curls_trans((float *)surface_curls_trans_.data_ptr(), surface_curls_trans_.size(0),
+    CudaTensor<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
+    CudaTensor<float, 3> surface_curls_trans((float *)surface_curls_trans_.data_ptr(), surface_curls_trans_.size(0),
                                              surface_curls_trans_.size(1), surface_curls_trans_.size(2));
 
     parallel_for_block(triangles_size, 256, [=] __device__(int x, int y) {
@@ -167,7 +167,7 @@ torch::Tensor assemble_potential_matrix(const torch::Tensor &vertices_,
     int points_size = points_.size(0);
     torch::Tensor matrix_ =
         torch::zeros({points_size, vertices_size}, torch::dtype(torch::kComplexFloat).device(torch::kCUDA));
-    PitchedPtr<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
+    CudaTensor<complex, 2> matrix((complex *)matrix_.data_ptr(), matrix_.size(0), matrix_.size(1));
     parallel_for_block(points_size, 512, [=] __device__(int i, int j) {
         for (int k = j; k < triangles_size; k += blockDim.x)
             face2PointIntegrand<type, TriGaussNum>(vertices, triangles[k], points[i], wave_number, &matrix(i, 0));

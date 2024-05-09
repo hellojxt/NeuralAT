@@ -56,10 +56,22 @@ trg_pos_min = torch.tensor(
 trg_pos_max = torch.tensor(
     config_data.get("solver", {}).get("trg_pos_max"), device="cuda", dtype=torch.float32
 )
+blank_pos_min = torch.tensor(
+    config_data.get("solver", {}).get("blank_pos_min"),
+    device="cuda",
+    dtype=torch.float32,
+)
+blank_pos_max = torch.tensor(
+    config_data.get("solver", {}).get("blank_pos_max"),
+    device="cuda",
+    dtype=torch.float32,
+)
 print("src_pos_min:", src_pos_min)
 print("src_pos_max:", src_pos_max)
 print("trg_pos_min:", trg_pos_min)
 print("trg_pos_max:", trg_pos_max)
+print("blank_pos_min:", blank_pos_min)
+print("blank_pos_max:", blank_pos_max)
 freq_min = config_data.get("solver", {}).get("freq_min", 100)
 freq_max = config_data.get("solver", {}).get("freq_max", 10000)
 freq_min_log = np.log10(freq_min)
@@ -80,9 +92,22 @@ for sample_idx in tqdm(range(src_sample_num)):
     vertices_vib_updated = vertices_vib + displacement
     vertices = torch.cat([vertices_vib_updated, vertices_static], dim=0)
     sample_points_base = torch.rand(
-        trg_sample_num, 3, device="cuda", dtype=torch.float32
+        trg_sample_num * 4, 3, device="cuda", dtype=torch.float32
     )
     trg_points = sample_points_base * (trg_pos_max - trg_pos_min) + trg_pos_min
+    blank = (
+        (trg_points[:, 0] > blank_pos_min[0])
+        & (trg_points[:, 0] < blank_pos_max[0])
+        & (trg_points[:, 1] > blank_pos_min[1])
+        & (trg_points[:, 1] < blank_pos_max[1])
+        & (trg_points[:, 2] > blank_pos_min[2])
+        & (trg_points[:, 2] < blank_pos_max[2])
+    )
+    valid = ~blank
+    trg_points = trg_points[valid][:trg_sample_num]
+    sample_points_base = sample_points_base[valid][:trg_sample_num]
+    print("trg_points.shape:", trg_points.shape)
+
     freq_base = torch.rand(1, device="cuda", dtype=torch.float32)
     freq_log = freq_base * (freq_max_log - freq_min_log) + freq_min_log
     freq = 10**freq_log
@@ -100,6 +125,7 @@ for sample_idx in tqdm(range(src_sample_num)):
     #     Visualizer().add_mesh(vertices, triangles, neumann.abs()).add_points(
     #         trg_points, y[sample_idx]
     #     ).show()
+    #     break
 
 
 torch.save({"x": x, "y": y}, f"{data_dir}/data/{sys.argv[1]}.pt")

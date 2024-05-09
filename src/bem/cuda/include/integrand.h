@@ -254,7 +254,7 @@ inline __device__ void potential_integrand(float3 point, float3 *src_v, float sr
     }
 }
 
-inline __device__ void identityIntegrand(const float3 *vertices, int3 tri, PitchedPtr<complex, 2> matrix)
+inline __device__ void identityIntegrand(const float3 *vertices, int3 tri, CudaTensor<complex, 2> matrix)
 {
     float3 v[3] = {{vertices[tri.x]}, {vertices[tri.y]}, {vertices[tri.z]}};
     float w = 0.5 * jacobian(v);
@@ -283,7 +283,7 @@ inline __device__ void face2FaceIntegrandRegular(const float3 *vertices,
                                                  float *curl_product,
                                                  int3 src,
                                                  int3 trg,
-                                                 PitchedPtr<complex, 2> matrix,
+                                                 CudaTensor<complex, 2> matrix,
                                                  float k,
                                                  bool log)
 {

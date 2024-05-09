@@ -5,12 +5,12 @@
 BEM_NAMESPACE_BEGIN
 
 template <typename T, size_t N>
-struct PitchedPtr
+struct CudaTensor
 {
-        HOST_DEVICE PitchedPtr() : ptr(nullptr) {}
+        HOST_DEVICE CudaTensor() : ptr(nullptr) {}
 
         template <typename... Sizes>
-        HOST_DEVICE PitchedPtr(T *ptr, Sizes... sizes) : ptr(ptr)
+        HOST_DEVICE CudaTensor(T *ptr, Sizes... sizes) : ptr(ptr)
         {
             set(ptr, sizes...);
         }

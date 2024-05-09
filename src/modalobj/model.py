@@ -77,17 +77,23 @@ def get_spherical_surface_points(vertices, scale=2):
     return points
 
 
+def normalize_vertices(vertices, scale=1.0):
+    bbox_min = vertices.min(axis=0)
+    bbox_max = vertices.max(axis=0)
+    # print("size:", (bbox_max - bbox_min).max())  # debug
+    vertices = (vertices - (bbox_max + bbox_min) / 2) / (bbox_max - bbox_min).max()
+    vertices = vertices * scale
+    return vertices
+
+
 class StaticObj:
     def __init__(self, mesh_path, scale=0.15):
         mesh = meshio.read(mesh_path)
         self.vertices = mesh.points
-        bbox_min = self.vertices.min(axis=0)
-        bbox_max = self.vertices.max(axis=0)
-        self.vertices = (
-            (self.vertices - (bbox_max + bbox_min) / 2)
-            / (bbox_max - bbox_min).max()
-            * scale
-        )
+        # bbox_min = self.vertices.min(axis=0)
+        # bbox_max = self.vertices.max(axis=0)
+        # print(mesh_path, "size:", (bbox_max - bbox_min).max())  # debug
+        self.vertices = normalize_vertices(self.vertices, scale)
         self.triangles = mesh.cells_dict["triangle"]
         self.bbox_min = self.vertices.min(axis=0)
         self.bbox_max = self.vertices.max(axis=0)

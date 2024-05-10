@@ -171,12 +171,6 @@ import matplotlib.pyplot as plt
 # plt.imshow(nc_spec)
 # plt.show()
 
-from scipy.io import wavfile
-import librosa
-import torchaudio
-import torch
-from scipy.interpolate import RegularGridInterpolator
-
 
 def apply_spec_mask_to_audio(
     audio_id,
@@ -186,6 +180,12 @@ def apply_spec_mask_to_audio(
     trg_sample_rate=16000,
     n_fft=256,
 ):
+    from scipy.io import wavfile
+    import librosa
+    import torchaudio
+    import torch
+    from scipy.interpolate import RegularGridInterpolator
+
     sample_rate, data = wavfile.read(f"dataset/audio/{audio_id}.wav")
     data = data[:, 0]
     data = (data / 32768).astype(np.float32)

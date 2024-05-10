@@ -22,8 +22,7 @@ for data_points in data_points_lst:
 
 xs = torch.cat(xs, dim=0)
 ys = torch.cat(ys, dim=0)
-print("ys.min():", ys.min())
-print("ys.max():", ys.max())
+ys = ys / ys.max()
 
 xs_train = xs[: int(len(xs) * 0.9)].cuda()
 ys_train = ys[: int(len(ys) * 0.9)].cuda()

@@ -59,38 +59,26 @@ class NeuralExpansionAT(nn.Module):
 
         condition_encoded = self.condition_encoding(condition_x)
         map_weight = self.w_net(condition_encoded).float().abs() / self.map_num
-        print("map_weight.shape:", map_weight.shape)
 
         theta_phi = torch.cat([theta, phi], dim=-1)
-        print("r.shape:", r.shape)
-        print("theta_phi.shape:", theta_phi.shape)
-
         map_feats = self.dense_map(theta_phi).reshape(
             -1, self.map_num, self.map_feat_dim
         )
-        print("map_feats.shape:", map_feats.shape)
         freq_encoded = (
             self.freq_encoding(freq_x).unsqueeze(1).repeat(1, self.map_num, 1)
         )
-        print("freq_encoded.shape:", freq_encoded.shape)
         map_input = torch.cat([freq_encoded, map_feats], dim=-1)
-        print("map_input.max():", map_input.max())
         map_value = (
             self.map_net(map_input.reshape(-1, self.map_net_in_dim))
             .float()
             .abs()
             .reshape(-1, self.map_num, self.term_num)
         )
-        print("map_value.shape:", map_value.shape)
-        print("map_value.min():", map_value.min())
-        print("map_value.max():", map_value.max())
+
+        r = r * (self.r_max - 1) + 1
         for i in range(self.term_num):
             map_value[:, :, i] *= 1.0 / (r ** (i + 1))
         map_value = map_value.sum(dim=-1)
-        print("map_value.shape:", map_value.shape)
-        print("map_value.min():", map_value.min())
-        print("map_value.max():", map_value.max())
+
         y = (map_value * map_weight).sum(dim=-1).unsqueeze(-1)
-        print("y.min():", y.min())
-        print("y.max():", y.max())
         return y

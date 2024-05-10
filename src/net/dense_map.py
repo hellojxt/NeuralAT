@@ -36,14 +36,9 @@ class DenseMap(nn.Module):
         xi = xi.unsqueeze(dim=-2)
         xf = xf.unsqueeze(dim=-2)
         neigs = torch.where(self.bin_mask, xi, xi + 1)
-        print("neigs.shape:", neigs.shape)
         ids = neigs[..., 0] * self.resolution + neigs[..., 1]
-        print("ids.shape:", ids.shape)
         neigs_features = self.embeddings[ids]
-        print("neigs_features.shape:", neigs_features.shape)
         weights = torch.where(self.bin_mask, 1 - xf, xf)
         w = weights.prod(dim=-1, keepdim=True)
-        print("w.shape:", w.shape)
         feats = torch.sum(neigs_features * w, dim=-2)
-        print("feats.shape:", feats.shape)
         return feats

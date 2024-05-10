@@ -23,7 +23,8 @@ class Model(nn.Module):
         )
 
     def forward(self, x):
-        x = self.grid(x).float()
+        batch_size = x.shape[0]
+        x = self.grid(x).float().reshape(batch_size, map_num, self.grid.output_dim)
         x = self.mlp(x)
         return x
 
@@ -50,13 +51,13 @@ model.train()
 tqdm_iter = tqdm(range(num_epochs))
 
 for epoch in tqdm_iter:
-    x = torch.rand(batch_size, map_num, 2)
+    x = torch.rand(batch_size, 2)
     coords = x * (1024 - 1)
     xi = coords.long()
-    p0 = imgs[0][xi[:, 0, 0], xi[:, 0, 1]]
-    p1 = imgs[1][xi[:, 1, 0], xi[:, 1, 1]]
-    p2 = imgs[2][xi[:, 2, 0], xi[:, 2, 1]]
-    p3 = imgs[3][xi[:, 3, 0], xi[:, 3, 1]]
+    p0 = imgs[0][xi[:, 0], xi[:, 1]]
+    p1 = imgs[1][xi[:, 0], xi[:, 1]]
+    p2 = imgs[2][xi[:, 0], xi[:, 1]]
+    p3 = imgs[3][xi[:, 0], xi[:, 1]]
 
     x = x.cuda()
     y = torch.stack([p0, p1, p2, p3], dim=1).unsqueeze(-1).cuda()
@@ -75,7 +76,6 @@ x = (np.arange(res[0], dtype=np.float32) + 0.5) / res[0]
 y = (np.arange(res[1], dtype=np.float32) + 0.5) / res[1]
 x, y = np.meshgrid(x, y)
 input = torch.tensor(np.stack([x, y], axis=-1).reshape(-1, 2)).cuda()
-input = input.unsqueeze(1).repeat(1, map_num, 1)
 pred = model(input).reshape(1024, 1024, map_num).cpu().detach().numpy()
 
 for i in range(map_num):

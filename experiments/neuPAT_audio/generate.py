@@ -50,28 +50,17 @@ src_pos_min = torch.tensor(
 src_pos_max = torch.tensor(
     config_data.get("solver", {}).get("src_pos_max"), device="cuda", dtype=torch.float32
 )
-trg_pos_min = torch.tensor(
-    config_data.get("solver", {}).get("trg_pos_min"), device="cuda", dtype=torch.float32
+bbox_center = torch.tensor(
+    config_data.get("solver", {}).get("bbox_center"), device="cuda", dtype=torch.float32
 )
-trg_pos_max = torch.tensor(
-    config_data.get("solver", {}).get("trg_pos_max"), device="cuda", dtype=torch.float32
-)
-blank_pos_min = torch.tensor(
-    config_data.get("solver", {}).get("blank_pos_min"),
-    device="cuda",
-    dtype=torch.float32,
-)
-blank_pos_max = torch.tensor(
-    config_data.get("solver", {}).get("blank_pos_max"),
-    device="cuda",
-    dtype=torch.float32,
-)
+bbox_r = config_data.get("solver", {}).get("bbox_r")
+r_max = config_data.get("solver", {}).get("r_max")
 print("src_pos_min:", src_pos_min)
 print("src_pos_max:", src_pos_max)
-print("trg_pos_min:", trg_pos_min)
-print("trg_pos_max:", trg_pos_max)
-print("blank_pos_min:", blank_pos_min)
-print("blank_pos_max:", blank_pos_max)
+print("bbox_center:", bbox_center)
+print("bbox_r:", bbox_r)
+print("r_max:", r_max)
+
 freq_min = config_data.get("solver", {}).get("freq_min", 100)
 freq_max = config_data.get("solver", {}).get("freq_max", 10000)
 freq_min_log = np.log10(freq_min)
@@ -92,21 +81,17 @@ for sample_idx in tqdm(range(src_sample_num)):
     vertices_vib_updated = vertices_vib + displacement
     vertices = torch.cat([vertices_vib_updated, vertices_static], dim=0)
     sample_points_base = torch.rand(
-        trg_sample_num * 4, 3, device="cuda", dtype=torch.float32
+        trg_sample_num, 3, device="cuda", dtype=torch.float32
     )
-    trg_points = sample_points_base * (trg_pos_max - trg_pos_min) + trg_pos_min
-    blank = (
-        (trg_points[:, 0] > blank_pos_min[0])
-        & (trg_points[:, 0] < blank_pos_max[0])
-        & (trg_points[:, 1] > blank_pos_min[1])
-        & (trg_points[:, 1] < blank_pos_max[1])
-        & (trg_points[:, 2] > blank_pos_min[2])
-        & (trg_points[:, 2] < blank_pos_max[2])
-    )
-    valid = ~blank
-    trg_points = trg_points[valid][:trg_sample_num]
-    sample_points_base = sample_points_base[valid][:trg_sample_num]
-    print("trg_points.shape:", trg_points.shape)
+    rs = (sample_points_base[:, 0] * (r_max - 1) + 1) * bbox_r
+    theta = sample_points_base[:, 1] * 2 * np.pi - np.pi
+    phi = sample_points_base[:, 2] * np.pi
+
+    xs = rs * torch.sin(phi) * torch.cos(theta) + bbox_center[0]
+    ys = rs * torch.sin(phi) * torch.sin(theta) + bbox_center[1]
+    zs = rs * torch.cos(phi) + bbox_center[2]
+
+    trg_points = torch.stack([xs, ys, zs], dim=-1)
 
     freq_base = torch.rand(1, device="cuda", dtype=torch.float32)
     freq_log = freq_base * (freq_max_log - freq_min_log) + freq_min_log

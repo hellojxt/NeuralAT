@@ -15,15 +15,8 @@ class DenseMap(nn.Module):
         self.feat_dim = feat_dim
         self.resolution = resolution
         self.map_num = map_num
-        self.offset = resolution**2
-        self.output_dim = feat_dim + 2
-        map_offsets = (
-            torch.arange(0, map_num * self.offset, self.offset)
-            .long()
-            .reshape(1, map_num, 1)
-        )
-        self.register_buffer("map_offsets", map_offsets)
-        self.embeddings = nn.Parameter(torch.empty(map_num * self.offset, feat_dim))
+        self.output_dim = feat_dim
+        self.embeddings = nn.Parameter(torch.empty(resolution**2, map_num * feat_dim))
         torch.nn.init.xavier_uniform_(self.embeddings)
 
         n_neigs = 1 << 2
@@ -34,8 +27,8 @@ class DenseMap(nn.Module):
 
     def forward(self, inputs):
         """
-        inputs: torch.Tensor, shape [batch_size, map_num, 2], in range [0, 1]
-        return: torch.Tensor, shape [batch_size, map_num, feat_dim]
+        inputs: torch.Tensor, shape [batch_size, 2], in range [0, 1]
+        return: torch.Tensor, shape [batch_size, map_num * feat_dim]
         """
         x = inputs * (self.resolution - 1)
         xi = x.long()
@@ -43,11 +36,14 @@ class DenseMap(nn.Module):
         xi = xi.unsqueeze(dim=-2)
         xf = xf.unsqueeze(dim=-2)
         neigs = torch.where(self.bin_mask, xi, xi + 1)
+        print("neigs.shape:", neigs.shape)
         ids = neigs[..., 0] * self.resolution + neigs[..., 1]
-        ids += self.map_offsets
+        print("ids.shape:", ids.shape)
         neigs_features = self.embeddings[ids]
+        print("neigs_features.shape:", neigs_features.shape)
         weights = torch.where(self.bin_mask, 1 - xf, xf)
         w = weights.prod(dim=-1, keepdim=True)
+        print("w.shape:", w.shape)
         feats = torch.sum(neigs_features * w, dim=-2)
-        xf = xf.squeeze(dim=-2)
-        return torch.cat([feats, xf], dim=-1)
+        print("feats.shape:", feats.shape)
+        return feats

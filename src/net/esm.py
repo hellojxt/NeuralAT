@@ -10,17 +10,17 @@ class NeuralExpansionAT(nn.Module):
         self,
         net_json_config,
         data_json_config,
-        map_num=64,
         term_num=4,
-        map_feat_dim=8,
-        map_res=128,
     ):
         super().__init__()
-        self.map_num = map_num
         self.term_num = term_num
-        self.map_feat_dim = map_feat_dim
+        map_config = net_json_config["dense_map"]
+        self.map_num = map_config["map_num"]
+        self.map_feat_dim = map_config["feats_dim"]
         self.dense_map = DenseMap(
-            feat_dim=map_feat_dim, resolution=map_res, map_num=map_num
+            feat_dim=map_config["feats_dim"],
+            resolution=map_config["resolution"],
+            map_num=map_config["map_num"],
         )
         self.condition_encoding = tcnn.Encoding(
             net_json_config["condition_encoding"]["n_dims"],
@@ -31,7 +31,7 @@ class NeuralExpansionAT(nn.Module):
         )
         self.w_net = tcnn.Network(
             self.condition_encoding.n_output_dims,
-            map_num,
+            self.map_num,
             net_json_config["pos_net"],
         )
         self.map_net_in_dim = (

@@ -210,6 +210,8 @@ class Scene:
         self.freq_max_log = np.log10(self.freq_max)
         self.trg_pos_min = torch.tensor(solver_json["trg_pos_min"]).cuda()
         self.trg_pos_max = torch.tensor(solver_json["trg_pos_max"]).cuda()
+        self.bbox_size = (self.trg_pos_max - self.trg_pos_min).max()
+        self.bbox_center = (self.trg_pos_max + self.trg_pos_min) / 2
         self.trg_points = None
 
     def sample(self, max_resize=2):
@@ -263,14 +265,19 @@ class Scene:
         freq = 10**freq_log
         k = (2 * np.pi * freq / 343.2).item()
         self.dirichlet = solver.neumann2dirichlet(k, self.neumann)
+
         sample_points_base = torch.rand(
             self.trg_sample_num, 3, device="cuda", dtype=torch.float32
         )
+        rs = (sample_points_base[:, 0] + 1) * self.bbox_size
+        theta = sample_points_base[:, 1] * 2 * np.pi - np.pi
+        phi = sample_points_base[:, 2] * np.pi
+        xs = rs * torch.sin(phi) * torch.cos(theta)
+        ys = rs * torch.sin(phi) * torch.sin(theta)
+        zs = rs * torch.cos(phi)
+        self.trg_points = torch.stack([xs, ys, zs], dim=-1) + self.bbox_center
+
         self.trg_factor = sample_points_base
-        self.trg_points = (
-            sample_points_base * (self.trg_pos_max - self.trg_pos_min)
-            + self.trg_pos_min
-        )
         self.potential = (
             solver.boundary2potential(k, self.neumann, self.dirichlet, self.trg_points)
             .abs()

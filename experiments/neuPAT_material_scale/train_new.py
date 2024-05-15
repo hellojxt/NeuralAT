@@ -9,7 +9,7 @@ from tqdm import tqdm
 import json
 import os
 
-data_dir = "dataset/NeuPAT_new/audio/baseline"
+data_dir = "dataset/NeuPAT_new/scale/baseline"
 data_points_lst = glob(f"{data_dir}/../data/*.pt")
 xs = []
 ys = []

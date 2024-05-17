@@ -1,7 +1,6 @@
 import sys
 
 sys.path.append("./")
-from src.timer import Timer
 from src.modalobj.model import (
     SNR,
     complex_ssim,
@@ -25,8 +24,6 @@ ffat_map_neuPAT = np.load(f"{data_dir}/neuPAT.npz")["ffat_map"].reshape(-1, 64, 
 ffat_map_neuPAT = (10**ffat_map_neuPAT) * 10e-6 - 10e-6
 cost_time_neuPAT = np.load(f"{data_dir}/neuPAT.npz")["cost_time"]
 
-ffat_map_ours = np.load(f"{data_dir}/ours.npz")["ffat_map"].reshape(-1, 64, 32)
-cost_time_ours = np.load(f"{data_dir}/ours.npz")["cost_time"]
 ffat_map_bem = np.load(f"{data_dir}/bem.npz")["ffat_map"].reshape(-1, 64, 32)
 cost_time_bem = np.load(f"{data_dir}/bem.npz")["cost_time"]
 points = np.load(f"{data_dir}/bem.npz")["points"]
@@ -35,18 +32,7 @@ ffat_map_NeuralSound = (
     ffat_map_NeuralSound / r[0] / 1.225 * (mesh_size / 0.15) ** (5 / 2)
 )
 
-ffat_map_bem = ffat_map_bem[:8]
-ffat_map_ours = ffat_map_ours[:8]
-ffat_map_NeuralSound = ffat_map_NeuralSound[:8]
-ffat_map_neuPAT = ffat_map_neuPAT[:8]
 
-max_ind = 8
-ind1 = np.random.randint(0, max_ind)
-ind2 = np.random.randint(0, max_ind)
-while ind1 == ind2:
-    ind2 = np.random.randint(0, max_ind)
-if ind1 > ind2:
-    ind1, ind2 = ind2, ind1
 ind1 = 1
 ind2 = 6
 index = ind1
@@ -146,28 +132,28 @@ print(
 )
 
 # Plot other images and add titles
-ax = plt.subplot(gs[3])
-ax.imshow(
-    np.abs(ffat_map_ours[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
-)
-ax.text(
-    16,
-    70,
-    f"{SNR(ffat_map_ours[index], ffat_map_bem[index]):.2f} | {complex_ssim(ffat_map_ours[index], ffat_map_bem[index]):.2f}",
-    ha="center",
-    fontproperties=my_font,
-    fontsize=font_size,
-)
-if len(sys.argv) > 2:
-    plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
-plt.axis("off")
+# ax = plt.subplot(gs[3])
+# ax.imshow(
+#     np.abs(ffat_map_ours[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
+# )
+# ax.text(
+#     16,
+#     70,
+#     f"{SNR(ffat_map_ours[index], ffat_map_bem[index]):.2f} | {complex_ssim(ffat_map_ours[index], ffat_map_bem[index]):.2f}",
+#     ha="center",
+#     fontproperties=my_font,
+#     fontsize=font_size,
+# )
+# if len(sys.argv) > 2:
+#     plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+# plt.axis("off")
 
-SNRs = []
-SSIMs = []
-for i in range(len(ffat_map_ours)):
-    SNRs.append(SNR(ffat_map_ours[i], ffat_map_bem[i]))
-    SSIMs.append(complex_ssim(ffat_map_ours[i], ffat_map_bem[i]))
-print(f"Ours: {np.mean(SNRs):.2f} | {np.mean(SSIMs):.2f} | {cost_time_ours:.3f}")
+# SNRs = []
+# SSIMs = []
+# for i in range(len(ffat_map_ours)):
+#     SNRs.append(SNR(ffat_map_ours[i], ffat_map_bem[i]))
+#     SSIMs.append(complex_ssim(ffat_map_ours[i], ffat_map_bem[i]))
+# print(f"Ours: {np.mean(SNRs):.2f} | {np.mean(SSIMs):.2f} | {cost_time_ours:.3f}")
 
 ax = plt.subplot(gs[4])
 ax.imshow(
@@ -230,21 +216,21 @@ if len(sys.argv) > 2:
 plt.axis("off")
 
 # Plot other images and add titles
-ax = plt.subplot(gs[8])
-ax.imshow(
-    np.abs(ffat_map_ours[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
-)
-ax.text(
-    16,
-    70,
-    f"{SNR(ffat_map_ours[index], ffat_map_bem[index]):.2f} | {complex_ssim(ffat_map_ours[index], ffat_map_bem[index]):.2f}",
-    ha="center",
-    fontproperties=my_font,
-    fontsize=font_size,
-)
-if len(sys.argv) > 2:
-    plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
-plt.axis("off")
+# ax = plt.subplot(gs[8])
+# ax.imshow(
+#     np.abs(ffat_map_ours[index]).reshape(64, 32), cmap="viridis", vmin=vmin, vmax=vmax
+# )
+# ax.text(
+#     16,
+#     70,
+#     f"{SNR(ffat_map_ours[index], ffat_map_bem[index]):.2f} | {complex_ssim(ffat_map_ours[index], ffat_map_bem[index]):.2f}",
+#     ha="center",
+#     fontproperties=my_font,
+#     fontsize=font_size,
+# )
+# if len(sys.argv) > 2:
+#     plt.title("MCAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+# plt.axis("off")
 
 # Add text below the image
 

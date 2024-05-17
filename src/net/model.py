@@ -5,7 +5,11 @@ import numpy as np
 
 
 class NeuPAT(nn.Module):
-    def __init__(self, n_output_dims, encoding_config, network_config):
+    def __init__(self, n_output_dims, config):
+        encoding_config, network_config = (
+            config["encoding_config"],
+            config["network_config"],
+        )
         super().__init__()
         self.model = tcnn.NetworkWithInputEncoding(
             encoding_config["n_dims"], n_output_dims, encoding_config, network_config

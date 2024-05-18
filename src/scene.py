@@ -290,3 +290,99 @@ class Scene:
         if self.trg_points is not None:
             vis.add_points(self.trg_points, self.potential)
         vis.show()
+
+
+class EditableModalSound:
+
+    def __init__(self, data_dir, ffat_res=(64, 32)):
+        with open(f"{data_dir}/config.json", "r") as file:
+            js = json.load(file)
+            sample_config = js.get("sample", {})
+            obj_config = js.get("vibration_obj", {})
+            self.size_base = obj_config.get("size")
+
+        data = torch.load(f"{data_dir}/modal_data.pt")
+        self.vertices_base = data["vertices"]
+        self.triangles = data["triangles"]
+        self.neumann_vtx = data["neumann_vtx"]
+        self.ks_base = data["ks"]
+        self.mode_num = len(self.ks_base)
+
+        self.freq_rate = sample_config.get("freq_rate")
+        self.size_rate = sample_config.get("size_rate")
+        self.bbox_rate = sample_config.get("bbox_rate")
+        self.sample_num = sample_config.get("sample_num")
+        self.point_num_per_sample = sample_config.get("point_num_per_sample")
+
+        self.ffat_res = ffat_res
+        xs = torch.linspace(0, 1, ffat_res[0], device="cuda", dtype=torch.float32)
+        ys = torch.linspace(0, 1, ffat_res[1], device="cuda", dtype=torch.float32)
+        self.gridx, self.gridy = torch.meshgrid(xs, ys)
+
+    def sample(self, freqK_base=None, sizeK_base=None, uniform=False):
+        if freqK_base is None:
+            self.freqK_base = torch.rand(1).cuda()
+        else:
+            self.freqK_base = freqK_base
+
+        if sizeK_base is None:
+            self.sizeK_base = torch.rand(1).cuda()
+        else:
+            self.sizeK_base = sizeK_base
+
+        self.freqK = self.freqK_base * self.freq_rate
+        self.sizeK = 1.0 / (1 + self.sizeK_base * (self.size_rate - 1))
+
+        self.vertices = self.vertices_base * self.sizeK
+        self.ks = self.ks_base * self.freqK / self.sizeK**0.5
+
+        if uniform:
+            sample_points_base = torch.zeros(
+                self.ffat_res[0] * self.ffat_res[1],
+                3,
+                device="cuda",
+                dtype=torch.float32,
+            )
+            sample_points_base[:, 0] = 0.5
+            sample_points_base[:, 1] = self.gridx.reshape(-1)
+            sample_points_base[:, 2] = self.gridy.reshape(-1)
+        else:
+            sample_points_base = torch.rand(
+                self.point_num_per_sample, 3, device="cuda", dtype=torch.float32
+            )
+
+        self.sample_points_base = sample_points_base
+        rs = (
+            (sample_points_base[:, 0] * (self.bbox_rate - 1) + 1) * self.size_base * 0.7
+        )
+        theta = sample_points_base[:, 1] * 2 * np.pi - np.pi
+        phi = sample_points_base[:, 2] * np.pi
+        xs = rs * torch.sin(phi) * torch.cos(theta)
+        ys = rs * torch.sin(phi) * torch.sin(theta)
+        zs = rs * torch.cos(phi)
+        self.trg_points = torch.stack([xs, ys, zs], dim=-1)
+
+        input_x = torch.zeros(
+            self.sample_points_base.shape[0],
+            3 + 1 + 1,
+            dtype=torch.float32,
+        )
+        input_x[:, :3] = self.sample_points_base
+        input_x[:, 3] = self.sizeK_base
+        input_x[:, 4] = self.freqK_base
+        return input_x
+
+    def solve(self):
+        bem_solver = BEM_Solver(self.vertices, self.triangles)
+        potentials = []
+        for i in range(self.mode_num):
+            dirichlet_vtx = bem_solver.neumann2dirichlet(
+                self.ks[i].item(), self.neumann_vtx[i]
+            )
+            potential = bem_solver.boundary2potential(
+                self.ks[i].item(), self.neumann_vtx[i], dirichlet_vtx, self.trg_points
+            ).abs()
+            potentials.append(potential)
+
+        self.potentials = torch.stack(potentials, dim=0).cpu()
+        return self.potentials

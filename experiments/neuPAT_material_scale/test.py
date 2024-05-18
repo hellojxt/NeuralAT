@@ -30,26 +30,29 @@ def bem_process(vertices, triangles, ks, neumanns, trg_points):
     for k, neumann in zip(ks, neumanns):
         dirichlet = solver.neumann2dirichlet(k, neumann)
         potential = solver.boundary2potential(k, neumann, dirichlet, trg_points)
-        potentials.append(potential.abs().cpu().numpy())
+        potentials.append(potential.abs())
         wave_numbers.append(-k.item())
     cost_time = timer.get_time_cost()
+    potentials = torch.stack(potentials, dim=0)
     np.savez(
         f"{get_output_dir(sizeK_base, freqK_base)}/bem.npz",
         vertices=vertices.cpu().numpy(),
         triangles=triangles.cpu().numpy(),
         neumann=neumanns.cpu().numpy(),
         wave_number=wave_numbers,
-        ffat_map=potentials,
+        ffat_map=potentials.cpu().numpy(),
         cost_time=cost_time,
         points=trg_points.cpu().numpy(),
     )
+    return potentials
 
 
 def calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos):
-    x = torch.zeros(len(trg_points), 5, dtype=torch.float32, device="cuda")
+    x = torch.zeros(len(trg_points), 6, dtype=torch.float32, device="cuda")
     x[:, :3] = trg_pos
     x[:, 3] = size_scale
     x[:, 4] = freq_scale
+    x[:, 5] = size_scale * freq_scale
     timer = Timer()
     ffat_map = model(x).T
     cost_time = timer.get_time_cost()
@@ -58,6 +61,7 @@ def calculate_ffat_map_neuPAT(size_scale, freq_scale, trg_pos):
         ffat_map=ffat_map.cpu().numpy(),
         cost_time=cost_time,
     )
+    return ffat_map
 
 
 import json
@@ -76,7 +80,7 @@ triangles = data["triangles"]
 neumann_vtx = data["neumann_vtx"]
 ks_base = data["ks"]
 mode_num = len(ks_base)
-mode_num = 8
+mode_num = 60
 
 ks_base = ks_base[:mode_num]
 neumann_vtx = neumann_vtx[:mode_num]
@@ -127,8 +131,11 @@ for sizeK_base, freqK_base in [
     trg_points = torch.stack([xs, ys, zs], dim=-1)
 
     if first:
-        bem_process(vertices, triangles, ks, neumann_vtx, trg_points)
-        calculate_ffat_map_neuPAT(sizeK_base, freqK_base, sample_points_base)
+        y = bem_process(vertices, triangles, ks, neumann_vtx, trg_points)
+        y = ((y + 10e-6) / 10e-6).log10()
+        y_pred = calculate_ffat_map_neuPAT(sizeK_base, freqK_base, sample_points_base)
+        print("y", y.shape, "y_pred", y_pred.shape)
+        print("loss", torch.nn.functional.mse_loss(y_pred, y))
         first = False
     bem_process(vertices, triangles, ks, neumann_vtx, trg_points)
     calculate_ffat_map_neuPAT(sizeK_base, freqK_base, sample_points_base)

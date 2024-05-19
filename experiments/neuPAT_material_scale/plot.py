@@ -33,8 +33,8 @@ ffat_map_NeuralSound = (
 )
 
 
-ind1 = 1
-ind2 = 6
+ind1 = 0
+ind2 = 50
 index = ind1
 from matplotlib.font_manager import FontProperties
 from matplotlib.image import imread
@@ -169,7 +169,7 @@ ax.text(
     fontsize=font_size,
 )
 if len(sys.argv) > 2:
-    plt.title("MCAT+NC", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("NAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 plt.axis("off")
 
 SNRs = []
@@ -249,7 +249,7 @@ ax.text(
 )
 
 if len(sys.argv) > 2:
-    plt.title("MCAT+NC", fontproperties=my_font, fontsize=font_size, pad=title_pad)
+    plt.title("NAT", fontproperties=my_font, fontsize=font_size, pad=title_pad)
 
 plt.axis("off")
 

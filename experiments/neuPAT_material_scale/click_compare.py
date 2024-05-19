@@ -125,7 +125,7 @@ def concatenate_videos(video_paths, output_path):
     os.remove("file_list.txt")
 
 
-root_dir = "dataset/NeuPAT/scale/small_mlp"
+root_dir = "dataset/NeuPAT_new/scale/test"
 from glob import glob
 
 data_dir_lst = glob(root_dir + "/*")
@@ -175,6 +175,7 @@ for data_dir in data_dir_lst:
     print(data_dir)
     click_lst = glob(data_dir + "/click/*_0.png")
     click_lst.sort()
+    click_lst = click_lst[::-1]
     idx = 0
     duration = 2
     for click_image in click_lst:

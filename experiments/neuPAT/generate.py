@@ -30,7 +30,10 @@ for src_idx in tqdm(range(scene.src_sample_num)):
     )
     x[src_idx, :, -2] = scene.resize_factor
     x[src_idx, :, -1] = scene.freq_factor
-    y[src_idx] = scene.potential.unsqueeze(-1)
+    y[src_idx] = scene.potential.abs().unsqueeze(-1)
+
+    if src_idx == 0:
+        scene.show()
 
 
 torch.save({"x": x, "y": y}, f"{data_dir}/data/{sys.argv[1]}.pt")

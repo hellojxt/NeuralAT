@@ -8,9 +8,9 @@ from tqdm import tqdm
 from time import time
 import torch
 
-data_dir = "dataset/NeuPAT_new/scale"
+data_dir = "dataset/NeuPAT_new/regular"
 
-modal_sound = EditableModalSound(data_dir)
+modal_sound = EditableModalSound(data_dir, uniform=False)
 
 term_num = 5
 
@@ -33,10 +33,6 @@ for sample_idx in tqdm(range(modal_sound.sample_num)):
     y[sample_idx] = modal_sound.solve().T
 
     if sample_idx == 0:
-        Visualizer().add_mesh(
-            modal_sound.vertices,
-            modal_sound.triangles,
-            modal_sound.neumann_vtx[0].abs(),
-        ).add_points(modal_sound.trg_points, y[sample_idx, :, 0]).show()
+        modal_sound.show(0)
 
 torch.save({"x": x, "y": y}, f"{data_dir}/data/{sys.argv[1]}.pt")

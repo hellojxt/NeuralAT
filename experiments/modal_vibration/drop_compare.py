@@ -129,6 +129,7 @@ def concatenate_videos(video_paths, output_path):
 
 root_dir = sys.argv[-1]
 from glob import glob
+import json
 
 data_dir_lst = glob(root_dir + "/*")
 video_paths = []
@@ -136,8 +137,12 @@ for data_dir in data_dir_lst:
     if not os.path.isdir(data_dir):
         continue
     print(data_dir)
-    bem_cost_time = np.load(data_dir + "/bem.npz")["cost_time"]
-    ours_cost_time = np.load(data_dir + "/ours_4000.npz")["cost_time"]
+    json_path = f"{data_dir}/cost_time.json"
+    with open(json_path, "r") as file:
+        cost_time = json.load(file)
+    print(cost_time)
+    bem_cost_time = cost_time["BEM"] / 28.12 * 1.1
+    ours_cost_time = cost_time["Poisson 4K"]
     print(bem_cost_time, ours_cost_time)
     add_subtitles_and_save_first_frame(
         f"{data_dir}/video.mp4",

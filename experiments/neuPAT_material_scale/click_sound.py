@@ -2,15 +2,12 @@ import sys
 
 sys.path.append("./")
 
-from src.modalobj.model import ModalSoundObj, MatSet, Material, BEMModel
-from src.utils import CombinedFig
+from src.modalobj.model import MatSet, Material
 import numpy as np
 import os
 from glob import glob
 from tqdm import tqdm
 from time import time
-import configparser
-import meshio
 from numba import njit
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -70,22 +67,23 @@ def get_mesh_size(vertices):
     return (bbox_max - bbox_min).max()
 
 
-mode_num = 8
+mode_num = 60
 bem_base_data = torch.load(os.path.join(obj_dir, "../../modal_data.pt"))
 modes = bem_base_data["modes"][:, :, :mode_num]
 print("modes", modes.shape)
 bem_data = np.load(os.path.join(obj_dir, "bem.npz"))
 wave_number = bem_data["wave_number"]
 eigenvalues = (wave_number * 343.2) ** 2
+omegas = wave_number * 343.2
 mesh_size = get_mesh_size(bem_data["vertices"])
 points = bem_data["points"]
 print("mesh_size", mesh_size)
 
 print("eigenvalues", eigenvalues.shape)
 
-if "0.74" in obj_dir:
+if "0.75" in obj_dir:
     mat = MatSet.Wood
-elif "0.49" in obj_dir:
+elif "0.40" in obj_dir:
     mat = MatSet.Steel
 else:
     mat = MatSet.Ceramic
@@ -104,6 +102,7 @@ camera_local_position = global_to_local(obj_pos, obj_ori, camera_pos)
 
 force_frame_num = 20
 global_mode_f = modes[impact_idx].T @ np.array([1, 1, 1])
+global_mode_f = global_mode_f * omegas**2
 for i in range(force_frame_num):
     modes_f[:, i] += global_mode_f * np.sin(i / force_frame_num * np.pi)
 

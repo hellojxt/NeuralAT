@@ -6,7 +6,7 @@ import numpy as np
 import subprocess
 import os
 
-data_dir = sys.argv[1]
+data_dir = "dataset/NeuPAT_new/scale/test"
 first = True
 case_list = glob(f"{data_dir}/*")
 

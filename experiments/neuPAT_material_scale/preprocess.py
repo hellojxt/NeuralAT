@@ -8,22 +8,21 @@ from src.utils import Visualizer
 import numpy as np
 import torch
 
-data_dir = "dataset/NeuPAT/scale"
+data_dir = "dataset/NeuPAT_new/scale"
 
 import json
 
 with open(f"{data_dir}/config.json", "r") as file:
     config_data = json.load(file)
 
-vibration_objects = config_data.get("vibration_obj", [])
-for obj in vibration_objects:
-    mesh = obj.get("mesh")
-    size = obj.get("size")
-    material = obj.get("material")
-    mode_num = obj.get("mode_num")
-    obj_vib = VibrationObj(f"{data_dir}/{mesh}")
-    obj_vib.normalize(size)
-    obj_vib.modal_analysis(k=mode_num, material=Material(getattr(MatSet, material)))
+obj = config_data["vibration_obj"]
+mesh = obj.get("mesh")
+size = obj.get("size")
+material = obj.get("material")
+mode_num = obj.get("mode_num")
+obj_vib = VibrationObj(f"{data_dir}/{mesh}")
+obj_vib.normalize(size)
+obj_vib.modal_analysis(k=mode_num, material=Material(getattr(MatSet, material)))
 
 vertices_vib = torch.from_numpy(obj_vib.surf_vertices).cuda().to(torch.float32)
 triangles_vib = torch.from_numpy(obj_vib.surf_triangles).cuda().to(torch.int32)
@@ -47,6 +46,7 @@ meshio.write_points_cells(
 )
 
 ks = torch.tensor(wave_number).to(torch.float32).cuda()
+print(len(ks))
 torch.save(
     {
         "vertices": vertices_vib,

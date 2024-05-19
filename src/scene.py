@@ -233,11 +233,11 @@ class Scene:
             obj.resize(resize_factor.item() * (max_resize - 1) + 1)
             if self.rot_num > 0:
                 obj.rotation(rot_factors[rot_idx].item())
-                if obj.rot_axis is not None:
+                if obj.rot_axis is not None and rot_idx < self.rot_num - 1:
                     rot_idx += 1
             if self.move_num > 0:
                 obj.move(move_factors[move_idx].item())
-                if obj.move_vec is not None:
+                if obj.move_vec is not None and move_idx < self.move_num - 1:
                     move_idx += 1
         self.vertices = torch.zeros(0, 3).cuda().to(torch.float32)
         self.triangles = torch.zeros(0, 3).cuda().to(torch.int32)
@@ -255,16 +255,16 @@ class Scene:
         self.obj_list_factors = obj_list_factors
         self.resize_factor = resize_factor
         self.freq_factor = freq_factor
-
-    def solve(self):
-        solver = BEM_Solver(self.vertices, self.triangles)
         freq_log = (
             self.freq_factor * (self.freq_max_log - self.freq_min_log)
             + self.freq_min_log
         )
         freq = 10**freq_log
-        k = (2 * np.pi * freq / 343.2).item()
-        self.dirichlet = solver.neumann2dirichlet(k, self.neumann)
+        self.k = (2 * np.pi * freq / 343.2).item()
+
+    def solve(self):
+        solver = BEM_Solver(self.vertices, self.triangles)
+        self.dirichlet = solver.neumann2dirichlet(self.k, self.neumann)
 
         sample_points_base = torch.rand(
             self.trg_sample_num, 3, device="cuda", dtype=torch.float32
@@ -275,26 +275,27 @@ class Scene:
         xs = rs * torch.sin(phi) * torch.cos(theta)
         ys = rs * torch.sin(phi) * torch.sin(theta)
         zs = rs * torch.cos(phi)
+        self.xs = xs
+        self.ys = ys
+        self.zs = zs
         self.trg_points = torch.stack([xs, ys, zs], dim=-1) + self.bbox_center
 
         self.trg_factor = sample_points_base
-        self.potential = (
-            solver.boundary2potential(k, self.neumann, self.dirichlet, self.trg_points)
-            .abs()
-            .cpu()
-        )
+        self.potential = solver.boundary2potential(
+            self.k, self.neumann, self.dirichlet, self.trg_points
+        ).cpu()
 
     def show(self):
         vis = Visualizer()
         vis.add_mesh(self.vertices, self.triangles, self.neumann.abs())
         if self.trg_points is not None:
-            vis.add_points(self.trg_points, self.potential)
+            vis.add_points(self.trg_points, self.potential.abs())
         vis.show()
 
 
 class EditableModalSound:
 
-    def __init__(self, data_dir, ffat_res=(64, 32)):
+    def __init__(self, data_dir, ffat_res=(64, 32), uniform=False):
         with open(f"{data_dir}/config.json", "r") as file:
             js = json.load(file)
             sample_config = js.get("sample", {})
@@ -318,8 +319,11 @@ class EditableModalSound:
         xs = torch.linspace(0, 1, ffat_res[0], device="cuda", dtype=torch.float32)
         ys = torch.linspace(0, 1, ffat_res[1], device="cuda", dtype=torch.float32)
         self.gridx, self.gridy = torch.meshgrid(xs, ys)
+        self.uniform = uniform
+        if uniform:
+            self.point_num_per_sample = ffat_res[0] * ffat_res[1]
 
-    def sample(self, freqK_base=None, sizeK_base=None, uniform=False):
+    def sample(self, freqK_base=None, sizeK_base=None):
         if freqK_base is None:
             self.freqK_base = torch.rand(1).cuda()
         else:
@@ -336,7 +340,7 @@ class EditableModalSound:
         self.vertices = self.vertices_base * self.sizeK
         self.ks = self.ks_base * self.freqK / self.sizeK**0.5
 
-        if uniform:
+        if self.uniform:
             sample_points_base = torch.zeros(
                 self.ffat_res[0] * self.ffat_res[1],
                 3,
@@ -381,8 +385,14 @@ class EditableModalSound:
             )
             potential = bem_solver.boundary2potential(
                 self.ks[i].item(), self.neumann_vtx[i], dirichlet_vtx, self.trg_points
-            ).abs()
+            )
             potentials.append(potential)
 
         self.potentials = torch.stack(potentials, dim=0).cpu()
         return self.potentials
+
+    def show(self, mode_idx=0):
+        vis = Visualizer()
+        vis.add_mesh(self.vertices, self.triangles, self.neumann_vtx[mode_idx].abs())
+        vis.add_points(self.trg_points, self.potentials[mode_idx].abs())
+        vis.show()

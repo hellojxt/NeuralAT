@@ -1,7 +1,7 @@
 import sys
 
 sys.path.append("./")
-from src.net.model import NeuPAT
+from src.net.model import NeuPAT_torch
 import torch
 from glob import glob
 from tqdm import tqdm
@@ -10,97 +10,42 @@ import os
 import numpy as np
 
 
+import torch
+import numpy as np
+
+
+def xyz2model(xs, ys, zs, sizes, freqs):
+    inputs = torch.stack([xs, ys, zs], dim=1)
+    rs = torch.sqrt(inputs[:, 0] ** 2 + inputs[:, 1] ** 2 + inputs[:, 2] ** 2)
+    phi = torch.acos(inputs[:, 2] / rs) / np.pi
+    theta = (torch.atan2(inputs[:, 1], inputs[:, 0]) + np.pi) / (2 * np.pi)
+    rs = rs / bbox_size - 1
+    x_batch = torch.stack([rs, theta, phi, sizes, freqs], dim=1)
+    # print("rs", rs.min(), rs.max())
+    # print("phi", phi.min(), phi.max())
+    # print("theta", theta.min(), theta.max())
+    # print("x_batch", x_batch.min(), x_batch.max())
+    pred = model(x_batch)
+    return torch.complex(pred[:, 0], pred[:, 1])
+
+
 def calculate_helmholtz_loss(xs, ys, zs, ks, sizes, freqs):
-    rs = torch.sqrt(xs**2 + ys**2 + zs**2) / bbox_size - 1
-    phi = torch.acos(zs / rs) / np.pi
-    theta = (torch.atan2(ys, xs) + np.pi) / (2 * np.pi)
-
-    x_batch = torch.stack([rs, theta, phi, sizes, freqs], dim=1).requires_grad_(True)
-    predictions = model(x_batch)
-    p_real = predictions[:, 0]
-    p_imag = predictions[:, 1]
-
-    # Calculate gradients
-    grad_p_real = torch.autograd.grad(
-        p_real,
-        xs,
-        grad_outputs=p_real.data.new(p_real.shape).fill_(1),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-    print(grad_p_real)
-    grad_p_imag = torch.autograd.grad(
-        p_imag,
-        inputs,
-        grad_outputs=torch.ones_like(p_imag),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-
-    grad_p_real_x = grad_p_real[:, 0]
-    grad_p_real_y = grad_p_real[:, 1]
-    grad_p_real_z = grad_p_real[:, 2]
-
-    grad_p_imag_x = grad_p_imag[:, 0]
-    grad_p_imag_y = grad_p_imag[:, 1]
-    grad_p_imag_z = grad_p_imag[:, 2]
-
-    grad_p_real_xx = torch.autograd.grad(
-        grad_p_real_x,
-        x,
-        grad_outputs=torch.ones_like(grad_p_real_x),
-        create_graph=True,
-        retain_graph=True,
-        allow_unused=True,
-    )[0]
-    grad_p_real_yy = torch.autograd.grad(
-        grad_p_real_y,
-        y,
-        grad_outputs=torch.ones_like(grad_p_real_y),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-    grad_p_real_zz = torch.autograd.grad(
-        grad_p_real_z,
-        z,
-        grad_outputs=torch.ones_like(grad_p_real_z),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-
-    grad_p_imag_xx = torch.autograd.grad(
-        grad_p_imag_x,
-        x,
-        grad_outputs=torch.ones_like(grad_p_imag_x),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-    grad_p_imag_yy = torch.autograd.grad(
-        grad_p_imag_y,
-        y,
-        grad_outputs=torch.ones_like(grad_p_imag_y),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-    grad_p_imag_zz = torch.autograd.grad(
-        grad_p_imag_z,
-        z,
-        grad_outputs=torch.ones_like(grad_p_imag_z),
-        create_graph=True,
-        allow_unused=True,
-    )[0]
-
-    laplacian_p_real = grad_p_real_xx + grad_p_real_yy + grad_p_real_zz
-    laplacian_p_imag = grad_p_imag_xx + grad_p_imag_yy + grad_p_imag_zz
-
-    # Ensure k is detached from the computation graph
-    k = k.detach()
-
-    helmholtz_loss_real = torch.mean((laplacian_p_real + k**2 * p_real) ** 2)
-    helmholtz_loss_imag = torch.mean((laplacian_p_imag + k**2 * p_imag) ** 2)
-
-    helmholtz_loss = helmholtz_loss_real + helmholtz_loss_imag
-    return helmholtz_loss
+    h = 1e-4
+    laplacian = (
+        xyz2model(xs + h, ys, zs, sizes, freqs)
+        + xyz2model(xs - h, ys, zs, sizes, freqs)
+        + xyz2model(xs, ys + h, zs, sizes, freqs)
+        + xyz2model(xs, ys - h, zs, sizes, freqs)
+        + xyz2model(xs, ys, zs + h, sizes, freqs)
+        + xyz2model(xs, ys, zs - h, sizes, freqs)
+        - 6 * xyz2model(xs, ys, zs, sizes, freqs)
+    ) / h**2
+    rhs = ks**2 * xyz2model(xs, ys, zs, sizes, freqs)
+    mask = torch.isnan(laplacian)
+    laplacian = laplacian[~mask]
+    rhs = rhs[~mask]
+    loss = (laplacian - rhs).abs().mean()
+    return loss * 0.001
 
 
 data_dir = "dataset/NeuPAT_new/regular/baseline"
@@ -108,6 +53,11 @@ data = torch.load(f"{data_dir}/../data/0.pt")
 bbox_size = data["bbox_size"].item()
 x = data["x"].cuda()
 y = data["y"].cuda()
+
+mask = torch.isnan(y).any(dim=-1)
+x = x[~mask]
+y = y[~mask]
+
 xx = data["xx"].cuda()
 
 x = x.reshape(-1, x.shape[-1])
@@ -136,7 +86,7 @@ for log in logs:
 writer = SummaryWriter(log_dir=data_dir)
 
 
-model = NeuPAT(2, net_config).cuda()
+model = NeuPAT_torch(2, net_config).cuda()
 
 optimizer = torch.optim.Adam(model.parameters(), lr=train_params.get("lr"))
 scheduler = torch.optim.lr_scheduler.StepLR(
@@ -153,6 +103,7 @@ for epoch_idx in tqdm(range(max_epochs)):
     xx_epoch = xx[xx_start_idx : xx_start_idx + len(xs_train)]
 
     loss_train = []
+    loss_reg = []
     for batch_idx in tqdm(range(0, len(xs_train), batch_size)):
         x_batch = xs_train[indices[batch_idx : batch_idx + batch_size]]
         y_batch = ys_train[indices[batch_idx : batch_idx + batch_size]]
@@ -161,15 +112,14 @@ for epoch_idx in tqdm(range(max_epochs)):
         y_pred = model(x_batch)
         loss1 = torch.nn.functional.mse_loss(y_pred, y_batch)
 
-        xs = xx_batch[:, 0].requires_grad_(True)
-        ys = xx_batch[:, 1].requires_grad_(True)
-        zs = xx_batch[:, 2].requires_grad_(True)
+        xs = xx_batch[:, 0]
+        ys = xx_batch[:, 1]
+        zs = xx_batch[:, 2]
         sizes = xx_batch[:, 3]
         freqs = xx_batch[:, 4]
         ks = xx_batch[:, -1]
         loss_reg = calculate_helmholtz_loss(xs, ys, zs, ks, sizes, freqs)
-
-        loss = loss1 + loss_reg
+        loss = loss_train + loss_reg
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()

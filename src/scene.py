@@ -112,6 +112,7 @@ class ObjAnim:
 class Obj:
     def __init__(self, obj_json, data_dir):
         obj = StaticObj(os.path.join(data_dir, obj_json["mesh"]), obj_json["size"])
+        self.name = obj_json["mesh"]
         self.vertices_base = torch.tensor(obj.vertices).cuda().to(torch.float32)
         self.triangles = torch.tensor(obj.triangles).cuda().to(torch.int32)
         self.resize_base = (
@@ -214,7 +215,7 @@ class Scene:
         self.bbox_center = (self.trg_pos_max + self.trg_pos_min) / 2
         self.trg_points = None
 
-    def sample(self, max_resize=2):
+    def sample(self, max_resize=2, log=False):
         rot_factors = torch.rand(self.rot_num).cuda()
         move_factors = torch.rand(self.move_num).cuda()
         obj_list_factors = torch.rand(self.obj_list_num).cuda()
@@ -233,10 +234,14 @@ class Scene:
             obj.resize(resize_factor.item() * (max_resize - 1) + 1)
             if self.rot_num > 0:
                 obj.rotation(rot_factors[rot_idx].item())
+                if log and obj.rot_axis is not None:
+                    print(obj.name, "rotaion idx:", rot_idx)
                 if obj.rot_axis is not None and rot_idx < self.rot_num - 1:
                     rot_idx += 1
             if self.move_num > 0:
                 obj.move(move_factors[move_idx].item())
+                if log and obj.move_vec is not None:
+                    print(obj.name, "move idx:", move_idx)
                 if obj.move_vec is not None and move_idx < self.move_num - 1:
                     move_idx += 1
         self.vertices = torch.zeros(0, 3).cuda().to(torch.float32)
